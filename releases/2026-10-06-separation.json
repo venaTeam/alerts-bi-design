@@ -1,0 +1,59 @@
+{
+  "contract_version": "0.1.0",
+  "date": "2026-10-06",
+  "source": {
+    "repository": "https://github.com/venaTeam/alerts-bi",
+    "commit": "c518eeaeb5a3ecb35b5348828300454379e7d535"
+  },
+  "design_source_revision": "e61f4d87dd985c1f9b3a379a6844f2bac7cccd01",
+  "applications": {
+    "alerts-bi-runs": {
+      "repository": "https://github.com/venaTeam/alerts-bi-runs",
+      "commit": "1ea5a869a9ad8ec904a91f6fa8d6fcaf12e53273"
+    },
+    "alerts-bi-portal": {
+      "repository": "https://github.com/venaTeam/alerts-bi-portal",
+      "commit": "04ebce266f96d504465f314cf01e50a6e1a1f424"
+    },
+    "alerts-bi-admin": {
+      "repository": "https://github.com/venaTeam/alerts-bi-admin",
+      "commit": "07f31fb0b06ec8b5041e486c4b0ff23eec654f3d"
+    }
+  },
+  "schema_head": "008_measurement_basis",
+  "registry": {
+    "version": "2026-10-01.1",
+    "sha256": "50c29418b54eee0482ba6cda6e50c352ead1f1de20f63539791a256d9886ddf0"
+  },
+  "libraries": {
+    "alerts-bi-shared": {
+      "version": "0.1.0",
+      "sha256": "84eec7615128319ba6d4c5f3a2b4cc878ecbb0bcf3ccd2a2a893d1ae0dc8bbff",
+      "producer": "1ea5a869a9ad8ec904a91f6fa8d6fcaf12e53273"
+    },
+    "alerts-bi-operations": {
+      "version": "0.1.0",
+      "sha256": "b4950ee123b56a9fc632480c4005933d1f5cef688f893c55b477d586ebe75382",
+      "producer": "1ea5a869a9ad8ec904a91f6fa8d6fcaf12e53273"
+    }
+  },
+  "verification": {
+    "runs_unit": 780,
+    "portal_unit": 219,
+    "admin_unit": 53,
+    "runs_integration": 105,
+    "coordinated_integration": 62,
+    "clean_acceptance": 4,
+    "skipped": 0,
+    "docker_builds": [
+      "runs",
+      "portal",
+      "admin"
+    ],
+    "browser_smoke": [
+      "portal published directory and team review",
+      "admin registered-team dashboard"
+    ]
+  },
+  "production_deployed": false
+}
