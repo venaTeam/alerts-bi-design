@@ -1,0 +1,70 @@
+{
+  "kind": "workspace",
+  "name": "Alerts BI workspace",
+  "summary": "Local non-Git parent for the four Alerts BI repositories. This routing file and WORKSPACE.json remain outside every repository.",
+  "sources": [
+    {
+      "role": "design",
+      "path": "alerts-bi-design/docs/alerts_bi_design.md",
+      "description": "Canonical design; read in full before repository work."
+    }
+  ],
+  "commands": [],
+  "repositories": [
+    {
+      "path": "alerts-bi-design",
+      "role": "Canonical product design, contracts, accepted decisions, and coordinated release evidence.",
+      "owner": "venaTeam; individual owner not assigned"
+    },
+    {
+      "path": "alerts-bi-runs",
+      "role": "Analysis execution, HTTP trigger, weekly scheduling, SQL persistence and migrations; producer of shared and operations libraries.",
+      "owner": "venaTeam; individual owner not assigned"
+    },
+    {
+      "path": "alerts-bi-portal",
+      "role": "Read-only published weekly reviews through the portal_* SQL views; consumes shared only.",
+      "owner": "venaTeam; individual owner not assigned"
+    },
+    {
+      "path": "alerts-bi-admin",
+      "role": "Authenticated operator actions and completed-run review; consumes shared and operations.",
+      "owner": "venaTeam; individual owner not assigned"
+    }
+  ],
+  "contracts": [
+    {
+      "producer": "alerts-bi-design",
+      "consumers": [
+        "alerts-bi-runs",
+        "alerts-bi-portal",
+        "alerts-bi-admin"
+      ],
+      "description": "Pinned design, registry/API/SQL/output contracts; docs/upstream/manifest.json records commit and hashes."
+    },
+    {
+      "producer": "alerts-bi-runs",
+      "consumers": [
+        "alerts-bi-portal",
+        "alerts-bi-admin"
+      ],
+      "description": "One SQL migration owner. shared wheel to both; operations wheel and registry artifact to admin only."
+    }
+  ],
+  "delivery_order": [
+    "Approve design/contracts",
+    "Build and verify runs migrations and shared libraries",
+    "Update pinned consumer wheels and test all apps",
+    "Publish exact compatible revisions in design/releases; deployment is separate"
+  ],
+  "invariants": [
+    "Do not initialize Git in this parent or add submodules. Keep this AGENTS.md local. Each child tracks its own AGENTS.md.",
+    "Read the target repository AGENTS.md and complete canonical design before changes. Work across repositories requires explicit ownership/contracts.",
+    "KeepHQ and the original alerts BI checkout are outside this workspace. Preserve them.",
+    "Each application builds from its own clone and committed lockfile. Never require a parent venv or PYTHONPATH sibling import.",
+    "At most three useful subagents; no recursive delegation; lead owns integration. Do not automatically execute repository scripts at session start."
+  ],
+  "open_questions": [
+    "Individual service owners and production artifact hosting beyond vendored wheels remain unassigned. No cluster deployment has been performed."
+  ]
+}
