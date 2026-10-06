@@ -33,11 +33,25 @@ def sync(root: Path, targets: list[Path]) -> None:
                 # Keep direct docs/upstream/alerts_bi_design.md as the documented entry point.
                 if folder == "docs":
                     destination = target / "docs/upstream" / source.relative_to(root / "docs")
+                elif folder == "decisions":
+                    destination = target / "docs/decisions" / source.relative_to(root / "decisions")
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
                 hashes[destination.relative_to(target).as_posix()] = hashlib.sha256(
                     source.read_bytes()
                 ).hexdigest()
+        manifest_path = target / "docs/upstream/manifest.json"
+        if manifest_path.exists():
+            previous = json.loads(manifest_path.read_text("utf-8"))["sha256"]
+            for relative, expected_hash in previous.items():
+                if relative not in hashes:
+                    stale = (target / relative).resolve()
+                    if not stale.is_relative_to((target / "docs").resolve()):
+                        raise SystemExit("Refusing an out-of-scope snapshot path")
+                    if stale.exists():
+                        if hashlib.sha256(stale.read_bytes()).hexdigest() != expected_hash:
+                            raise SystemExit(f"Preserve locally edited snapshot: {stale}")
+                        stale.unlink()
         (target / "docs/upstream/manifest.json").write_text(
             json.dumps(
                 {

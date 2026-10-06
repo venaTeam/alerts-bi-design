@@ -14,14 +14,14 @@ def main() -> None:
     assert (ROOT / "CLAUDE.md").read_text("utf-8").strip() == "@AGENTS.md"
     instructions = (ROOT / "AGENTS.md").read_text("utf-8")
     assert "alerts_bi_design.md" in instructions and "in full" in instructions
-    for path in (
+    for relative in (
         "docs/alerts_bi_design.md",
         "docs/alerts_bi_flow.md",
         "docs/alerts_bi_implementation_plan.md",
         "docs/outputs.md",
         "decisions/001-repository-separation.md",
     ):
-        assert (ROOT / path).is_file(), path
+        assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))
     assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 8
     assert "008_measurement_basis" == migrations["schema_head"]

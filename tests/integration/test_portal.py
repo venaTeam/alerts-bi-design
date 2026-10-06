@@ -1093,7 +1093,7 @@ def test_every_page_carries_the_security_headers(portal: TestClient) -> None:
     for path in ("/", f"/teams/{TEAM}", "/healthz"):
         response = portal.get(path)
         assert response.status_code == 200, path
-        assert "default-alerts_bi_runs 'none'" in response.headers["content-security-policy"]
+        assert "default-src 'none'" in response.headers["content-security-policy"]
         assert response.headers["x-frame-options"] == "DENY"
 
 

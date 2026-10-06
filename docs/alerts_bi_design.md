@@ -649,13 +649,13 @@ Recorded here so they read as choices rather than oversights.
 
 The mock and its documentation were built against earlier versions of this design and had drifted.
 
-* [`scripts/generate_mock_alerts.py`](../scripts/generate_mock_alerts.py) generates rule-6 spam data and multi-month spans that a 7-day, no-comparison run never reads. Not wrong — ahead of what the MVP consumes — but it means the mock exercises paths the pipeline does not have.
+* [`scripts/generate_mock_alerts.py`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/scripts/generate_mock_alerts.py) generates rule-6 spam data and multi-month spans that a 7-day, no-comparison run never reads. Not wrong — ahead of what the MVP consumes — but it means the mock exercises paths the pipeline does not have.
 * [`team_alert_status.md`](team_alert_status.md) described per-team phase and quality against the withdrawn pairing metric and the old phase table (section 3.4).
 * Neither carried `alert_rule_url` groupings dense enough to test 7.1 properly. Testing the grouping bet needs mock rules with **many** distinct alerts each, which the original generator did not reliably produce.
 
 Reconcile before building the pipeline against the mock, or the first thing the pipeline proves will be that the fixtures are stale.
 
-**Reconciled 2026-08-30.** The generator was extended rather than replaced, and four `acceptance-*` teams were appended after the seven realistic ones — appended last on purpose, so the seeded RNG draws consumed by the existing teams are unchanged and their generated data stays byte-stable. They are defined in [`scripts/acceptance_teams.py`](../scripts/acceptance_teams.py) and cover the paths the original fixtures could not reach: both inclusive R7 boundaries and one millisecond outside each, an API alert with no rule URL that must not match R4, a multi-date identity whose finding must stay on the date that matched, all three v2 readiness rules including a non-critical R9 that must not reduce readiness, a 401-alert rule-URL group that must split 134/134/133, a missing-URL application group that must never merge with it, multi-panel suppression disagreement, an `OR`-nested leaf, an unresolved `query` variable, and a 60% blast radius. The generator also gained explicit index mappings and a guarded `RESET=1` clean reload; `team_alert_status.md` was rewritten against the settled phase and rule definitions; and [`scripts/es_scale_probe.py`](../scripts/es_scale_probe.py) now reports the two approved diagnostics with their operands, scoped to one selected team.
+**Reconciled 2026-08-30.** The generator was extended rather than replaced, and four `acceptance-*` teams were appended after the seven realistic ones — appended last on purpose, so the seeded RNG draws consumed by the existing teams are unchanged and their generated data stays byte-stable. They are defined in [`scripts/acceptance_teams.py`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/scripts/acceptance_teams.py) and cover the paths the original fixtures could not reach: both inclusive R7 boundaries and one millisecond outside each, an API alert with no rule URL that must not match R4, a multi-date identity whose finding must stay on the date that matched, all three v2 readiness rules including a non-critical R9 that must not reduce readiness, a 401-alert rule-URL group that must split 134/134/133, a missing-URL application group that must never merge with it, multi-panel suppression disagreement, an `OR`-nested leaf, an unresolved `query` variable, and a 60% blast radius. The generator also gained explicit index mappings and a guarded `RESET=1` clean reload; `team_alert_status.md` was rewritten against the settled phase and rule definitions; and [`scripts/es_scale_probe.py`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/scripts/es_scale_probe.py) now reports the two approved diagnostics with their operands, scoped to one selected team.
 
 **Rule 6 data remains in the mock and is simply not consumed**, which is the intended state: the rule stays documented and its fixtures stay generated, so switching R6 on later does not require re-seeding.
 
@@ -1048,6 +1048,8 @@ consume both. No app imports another app. Consumer lockfiles pin vendored releas
 and their hashes; standalone builds never require a sibling checkout or runtime fetch.
 
 The existing SQL database/login and `portal_*` publication boundaries remain unchanged.
+Consumer readiness compiles its required read columns and returns a redacted 503 for
+missing schema; portal performs this check only through its allowed views.
 Runs owns revisions 001–008 and their byte-identical SQL and revision files; a minimal
 legacy `src.db.ledger` import bridge preserves historical revisions. No new migration,
 database split, service API, analysis behavior or deployment is approved by this move.
@@ -1056,6 +1058,7 @@ owns the schema and guides; packaged copies and application documentation snapsh
 pinned by revision and SHA-256. Updating a guide still requires prompt-version discipline.
 Analysis `APP_VERSION`, rule/prompt/parser versions and deterministic IDs stay unchanged.
 
+The [source map](source-map.md) routes historical component names to their current owners.
 The [separation plan](repository-separation-plan.md) records the detailed boundaries.
 [Decision 001](../decisions/001-repository-separation.md) records the accepted packaging
 choices. Actual tested commits and limitations belong in `releases/`, separately from

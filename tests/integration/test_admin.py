@@ -275,8 +275,8 @@ def test_the_full_scorecard_renders_from_sql_with_its_own_policy(client: TestCli
     response = client.get(f"/runs/{RUN1}/scorecard", headers=ALICE)
     assert response.status_code == 200
     assert "<html" in response.text.lower()
-    assert "style-alerts_bi_runs 'unsafe-inline'" in response.headers["content-security-policy"]
-    assert "script-alerts_bi_runs" not in response.headers["content-security-policy"]
+    assert "style-src 'unsafe-inline'" in response.headers["content-security-policy"]
+    assert "script-src" not in response.headers["content-security-policy"]
 
 
 def test_an_unknown_run_is_not_found(client: TestClient) -> None:
@@ -299,7 +299,7 @@ def test_the_summary_of_a_persisted_run_renders_for_the_signed_in_operator(
     assert response.status_code == 200
     page = response.text
     assert "Signed in as alice" in page
-    assert "script-alerts_bi_runs" not in response.headers["content-security-policy"]
+    assert "script-src" not in response.headers["content-security-policy"]
     assert "<script" not in page and " style=" not in page
     assert "Something went wrong &lt;b&gt;now&lt;/b&gt;" in page
     assert RUN0 in page and "never published" in page

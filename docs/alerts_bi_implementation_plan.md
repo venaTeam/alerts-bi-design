@@ -1,5 +1,7 @@
 # Alerts BI — Implementation Blueprint
 
+Repository separation: use the [current source map](source-map.md) for package paths and application ownership. The behavior described below is unchanged.
+
 This document defines what to build and the recommended order of implementation. [`alerts_bi_design.md`](alerts_bi_design.md) remains the source of truth when this blueprint and the design differ.
 
 ## 1. MVP deliverables

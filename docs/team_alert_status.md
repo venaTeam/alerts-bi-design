@@ -6,7 +6,7 @@
 
 This describes the **synthetic fixture**, not any real team. It is documentation of the
 mock, and it is deliberately **not an acceptance oracle**: the oracle is the hand-authored
-[`test/fixtures/expected-results.json`](../test/fixtures/expected-results.json), which covers
+[`test/fixtures/expected-results.json`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/test/fixtures/expected-results.json), which covers
 the six `acceptance-*` teams. The seven realistic teams exist to give the pipeline
 lifelike shapes and volumes to run against.
 
@@ -161,10 +161,10 @@ does not need a second, advisory opinion first.
 ## The six acceptance teams
 
 These are pinned fixtures, defined in
-[`scripts/acceptance_teams.py`](../scripts/acceptance_teams.py). Outside
+[`scripts/acceptance_teams.py`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/scripts/acceptance_teams.py). Outside
 `acceptance-fire-patterns`, every row sits on `2026-08-23T12:00:00Z` or
 `2026-08-24T12:00:00Z` with an exact expected outcome, so
-[`test/fixtures/expected-results.json`](../test/fixtures/expected-results.json) can be
+[`test/fixtures/expected-results.json`](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/test/fixtures/expected-results.json) can be
 computed by hand. (They sat on 2026-08-20 and 2026-08-21 until R6 began judging firing
 episodes, when stuck was first measured to the window end and a lone row there would have
 been stuck. Stuck now needs the open episode's firing rows to span 72 hours, which rows at

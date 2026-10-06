@@ -1,5 +1,7 @@
 # Alerts BI — Runtime Flow
 
+Repository separation: use the [current source map](source-map.md) for package paths and application ownership. The behavior described below is unchanged.
+
 This document describes one MVP run from start to finish. [`alerts_bi_design.md`](alerts_bi_design.md) remains the source of truth for rules, rationale, and scope.
 
 ## 1. Start a run for one team

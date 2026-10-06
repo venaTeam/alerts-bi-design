@@ -15,6 +15,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sql", action="store_true", help="Check local disposable SQL metadata")
     args = parser.parse_args()
+    from alerts_bi_operations.registry import SCHEMA_PATH
     from alerts_bi_operations.report.csv_export import (
         DAILY_METRIC_HEADERS,
         RULE_COUNT_HEADERS,
@@ -26,6 +27,9 @@ def main() -> None:
     from alerts_bi_runs.db.migrate import heads
 
     config = load_config()
+    assert SCHEMA_PATH.read_bytes() == (ROOT / "contracts/teams.schema.json").read_bytes(), (
+        "Registry schema drift"
+    )
     expected_api = json.loads((ROOT / "contracts/trigger-openapi.json").read_text("utf-8"))
     assert build_app(ApiSettings(config=config)).openapi() == expected_api, "Trigger API drift"
     outputs = json.loads((ROOT / "contracts/outputs.json").read_text("utf-8"))

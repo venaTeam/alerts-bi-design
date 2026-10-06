@@ -99,7 +99,7 @@ Each application must install and run from a standalone clone. Production builds
 
 ## 3. What the current code requires us to separate
 
-The application surfaces exist, but their packaging is shared. [The current package](../pyproject.toml) installs one distribution whose import name is `src`; [the Dockerfile](../Dockerfile) builds one image for all commands.
+The application surfaces exist, but their packaging is shared. [The current package](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/pyproject.toml) installs one distribution whose import name is `src`; [the Dockerfile](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/Dockerfile) builds one image for all commands.
 
 | Current area | Destination / action |
 |---|---|
@@ -120,12 +120,12 @@ The application surfaces exist, but their packaging is shared. [The current pack
 
 Specific seams discovered in the source:
 
-- [Admin pages](../src/admin/pages.py) and [admin summary](../src/admin/summary.py) import portal styles, explanation functions, charts, HTML helpers, summary rendering and `daily_points`. These must become pure shared presentation functions. Admin must not install the portal app just to render a page.
-- [Weekly scheduling](../src/weekly/runner.py) calls the same publication function as [admin](../src/admin/app.py). Keep that one transactional implementation in a shared operations package.
-- [Portal settings](../src/config/portal.py) load the full pipeline `AppConfig`; [admin settings](../src/config/admin.py) also contain it. Give each application its own settings so portal/admin do not validate or require ES/LLM configuration.
-- [The common CLI](../src/cli.py) imports the pipeline and model modules before selecting a command. Separate entry points are necessary; moving only the web folders would leave this coupling.
-- [Registry loading](../src/registry.py) and [prompt construction](../src/llm/prompt.py) depend on working-directory-relative resources. Install schemas/guides as package resources without changing their content, while keeping the registry data path explicitly configurable.
-- [The portal boundary test](../tests/unit/test_portal_surface.py) checks direct imports in portal files. Add a transitive installed-package check after extraction, so shared libraries cannot indirectly reconnect the portal to operator writes or the pipeline.
+- [Admin pages](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/admin/pages.py) and [admin summary](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/admin/summary.py) import portal styles, explanation functions, charts, HTML helpers, summary rendering and `daily_points`. These must become pure shared presentation functions. Admin must not install the portal app just to render a page.
+- [Weekly scheduling](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/weekly/runner.py) calls the same publication function as [admin](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/admin/app.py). Keep that one transactional implementation in a shared operations package.
+- [Portal settings](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/config/portal.py) load the full pipeline `AppConfig`; [admin settings](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/config/admin.py) also contain it. Give each application its own settings so portal/admin do not validate or require ES/LLM configuration.
+- [The common CLI](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/cli.py) imports the pipeline and model modules before selecting a command. Separate entry points are necessary; moving only the web folders would leave this coupling.
+- [Registry loading](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/registry.py) and [prompt construction](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/src/llm/prompt.py) depend on working-directory-relative resources. Install schemas/guides as package resources without changing their content, while keeping the registry data path explicitly configurable.
+- [The portal boundary test](https://github.com/venaTeam/alerts-bi-runs/blob/c518eeaeb5a3ecb35b5348828300454379e7d535/tests/unit/test_portal_surface.py) checks direct imports in portal files. Add a transitive installed-package check after extraction, so shared libraries cannot indirectly reconnect the portal to operator writes or the pipeline.
 
 ## 4. Shared libraries and dependency direction
 
