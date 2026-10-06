@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-06",
+  "change": "Application source directly in src; distinct installed service namespaces preserved",
+  "design_input_revision": "75fa93bef16628faf66e795ec80ea821986101cb",
+  "applications": {
+    "alerts-bi-runs": "cdcc01c61db213a3d8bbe47fb1bb93551fa81c95",
+    "alerts-bi-portal": "d602e73600ce7000325edba303059bafbc622073",
+    "alerts-bi-admin": "2e02488c152d8a64d0c0faee9dae5bcad3882175"
+  },
+  "schema_head": "008_measurement_basis",
+  "libraries": {
+    "alerts-bi-shared": "0.1.0 unchanged",
+    "alerts-bi-operations": "0.1.0 unchanged"
+  },
+  "local_artifact_sha256": {
+    "alerts-bi-runs/alerts_bi_runs-0.1.0-py3-none-any.whl": "93683bdbb4b5e13c3ae592723cd260b1aa058298477ca7103e4e077aca8e7db2",
+    "alerts-bi-runs/alerts_bi_runs-0.1.0.tar.gz": "d9f73311802c9c3861e494b8e3759c00d50edf0ee0908613ee62b400eb7af3a1",
+    "alerts-bi-portal/alerts_bi_portal-0.1.0-py3-none-any.whl": "e7f28cd955747291f9f6cc7e68bbfdd0f362ffb126254e751c3b9289d1dd610e",
+    "alerts-bi-portal/alerts_bi_portal-0.1.0.tar.gz": "b6bd547f9af118e2e98c969c313036cb6eece46bcd5ae6e5b5aa3124087ba6ad",
+    "alerts-bi-admin/alerts_bi_admin-0.1.0-py3-none-any.whl": "d94bef58b4b84a1825d181c3d039e93939f111b640d3543eef929d7be7dece42",
+    "alerts-bi-admin/alerts_bi_admin-0.1.0.tar.gz": "8a35130ea5264b2c636bacf184a81974d6acb39170c5ab4b226d2c0607e36f65"
+  },
+  "verification": {
+    "unit": {
+      "runs": 780,
+      "portal": 219,
+      "admin": 53
+    },
+    "runs_integration": 105,
+    "acceptance": 4,
+    "installed_wheel_integration": 62,
+    "ruff_format_lint_mypy": "passed in all four repos",
+    "frozen_lockfiles": "passed for all three apps",
+    "wheel_and_source_archive_builds": "passed for all three apps; standalone inputs inspected",
+    "docker_builds_and_network_disabled_smoke": "passed for all three apps outside source checkout",
+    "contracts": "API, CSV, SQL columns, registry schema, migration/revision bytes and guide bytes matched",
+    "local_services": "Restarted; health endpoints and pages returned 200 on 8000/8100/8200"
+  },
+  "limits": [
+    "Deterministic fake LLM; no live model or production/cluster validation",
+    "Existing seeded Elasticsearch mock reused; no reseed was needed",
+    "Existing third-party Starlette/httpx deprecation warning remains"
+  ],
+  "recovery": "Restore the prior compatible commits/images from 2026-10-06-separation.json; no SQL rollback or data movement"
+}
