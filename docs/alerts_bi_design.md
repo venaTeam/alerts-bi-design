@@ -1122,3 +1122,9 @@ Slides identify the application selection in their footer and label team context
 
 All existing read-only, network, publication-isolation, escaping and CSP guarantees apply.
 The default with no filter retains the current complete-team behavior.
+
+**Dropdown interaction, requested 2026-10-08:** the application and week selectors close
+when the reader clicks outside the open dropdown. Opening either selector closes the
+other; Escape also dismisses it. Interacting with application checkboxes keeps that
+dropdown open until Apply or dismissal. Use native automatic HTML popovers so the portal
+continues to work without scripts and retains its existing CSP and GET-only forms.
