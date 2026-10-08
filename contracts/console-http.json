@@ -1,7 +1,7 @@
 {
   "approved": "2026-10-08",
-  "owner": "alerts-bi-runs",
-  "entrypoint": "alerts-bi-runs serve",
+  "owner": "alerts-bi-admin",
+  "entrypoint": "alerts-bi-admin serve",
   "authentication": "Loopback-only application behind trusted operator identity proxy; explicit --dev-user for local development only",
   "csrf": {
     "forms": "csrf field",
@@ -43,5 +43,6 @@
     "teams",
     "schedule",
     "decisions"
-  ]
+  ],
+  "execution_runtime": "Pinned alerts-bi-runs-runtime wheel in the admin repository; in-process API/config adapters, no separate listener"
 }
