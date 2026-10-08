@@ -1,5 +1,17 @@
 # Alerts BI — Design Document
 
+## Accepted consolidation — 2026-10-08
+
+The user approved implementing the team-centered unified operator mock. This amendment supersedes the separate unauthenticated trigger and admin web-service boundaries in sections 7.9, 7.12 and 7.16 and the original repository-separation decision. `alerts-bi-runs serve` now owns one authenticated operator console and its run API. The runs image contains the admin review implementation; it imports shared and operations libraries, never the sibling admin application. The legacy admin repository is retained for rollback and command-line tooling. Portal remains a separate read-only service; weekly jobs remain in the runs image.
+
+Navigation starts at Teams. Opening a team shows its paginated run history and a selected run with Overview, Findings, Decisions and Activity tabs. Overview retains the current summary, independent v1/v2 metrics, complete-day charts, filtered SQL work list, panel SQL and four approved exports. Findings exposes stored evidence and representative data to authenticated operators. Decisions shows the selected run's append-only audit history. Activity shows publication history and the team's schedule log. Analysis completion and publication state are separate.
+
+New run is scoped to the selected registered team, takes a UTC window end and live/fake/off model mode, and invokes the existing synchronous execution/persistence/reporting path under the existing process gate. Its window is exactly the preceding 168 hours. UI and JSON triggers share the gate. Manual completion does not publish. Existing publish/replace/gap, withdraw-with-reason and published-run decision rules remain authoritative. Actions return to the selected team/run; an explicit cross-team run selection is refused. No migration, scoring, prompt, deterministic identifier or output-content changes are authorized by this consolidation.
+
+All console and API routes require the proxy identity (or an explicitly supplied local `--dev-user`). The listener refuses non-loopback addresses and requires `ADMIN_SECRET` of at least 32 characters. Browser writes use same-site CSRF forms; JSON `POST /runs` requires `X-CSRF-Token` obtained from authenticated `GET /csrf`. No unauthenticated trigger Service remains in the deployment topology. Existing request/response payloads and export routes are retained behind authentication; the old API factory is a compatibility/test harness, not a deployment entry point. Default port is 8000; `ADMIN_*` configuration is retained with API bind/registry/output fallbacks. One replica and one worker preserve the existing process-local gate guarantee.
+
+The implementation remains server-rendered with a content-addressed stylesheet and a small same-origin script for trigger feedback. Empty teams, failed runs, refusal messages, keyboard-accessible forms and narrow viewports are required states. Infrastructure rollout is a separate authorized action; see `unified-console-deployment.md`.
+
 **Status:** MVP design settled and implemented; implementation language changed to Python (section 7.7); read-only review portal added (section 7.10); automatic weekly reviews (section 7.11); operator admin app (section 7.12); LLM review upgrade and evaluation tooling (section 7.13); team summary, R6 and `unseen` (section 7.14); the portal's team week split into tabs (section 7.10, amended 2026-10-04)
 **Last updated:** 2026-10-08
 

@@ -1,5 +1,9 @@
 # Alerts BI — Runtime Flow
 
+## Unified operator service amendment — 2026-10-08
+
+The accepted consolidation in `alerts_bi_design.md` supersedes the separate trigger/admin web topology described below. `alerts-bi-runs serve` now provides authenticated Teams → team run history → selected run Overview/Findings/Decisions/Activity, plus trigger/publish/withdraw/decide. It reuses the existing SQL/reporting and review operations; portal, weekly scheduling, exact 168-hour windows, migration ownership and output payloads remain unchanged. JSON triggers require proxy identity and `X-CSRF-Token` from `/csrf`. Browser writes require same-site form CSRF. Deploy one runs console behind the existing operator login proxy; see `unified-console-deployment.md`. The old trigger factory remains a compatibility harness only.
+
 Repository separation: use the [current source map](source-map.md) for package paths and application ownership. The behavior described below is unchanged.
 
 This document describes one MVP run from start to finish. [`alerts_bi_design.md`](alerts_bi_design.md) remains the source of truth for rules, rationale, and scope.
