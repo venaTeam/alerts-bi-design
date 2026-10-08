@@ -1080,3 +1080,33 @@ Setuptools maps that source directory to the distinct installed `alerts_bi_runs`
 `alerts_bi_portal`, or `alerts_bi_admin` namespace, so coordinated tests can install
 all three distributions without a module collision. Entry-point names, shared-library
 namespaces, immutable migrations/resources, and analysis versions remain unchanged.
+
+## Global portal application filter — 2026-10-08
+
+The product owner requested a multi-application selector on team pages and clarified that
+it applies across every tab. Place it above the tab navigation. List application values
+from this team's published alerts across its available weeks. Select several values,
+apply them together, remove individual selected values, or use **Show all** to restore the
+team view. A GET form and repeated `apps` query parameters keep the selection bookmarkable
+without scripts. `scope=selected` with no `apps` is an empty selection, not all applications.
+Unknown or absent values match no alerts; they never broaden the selection.
+
+Preserve the selection through Overview, Fix list, Volume, Dashboards, Migration, History,
+Slides, week navigation, alert detail/back links, local Fix list filters and pagination.
+Changing application selection resets pagination while retaining the local filters.
+Filter alerts, findings, weekly counts, weekly history and migration estimates consistently;
+keep v1 and v2 separate. Application options are not narrowed by other filters.
+
+Implementation treatment for existing stored data: weekly identity/event totals and
+per-rule matched events are available from `portal_alerts`; daily application buckets and
+the union of rule-flagged event matches are not. Do not infer daily points from first/last
+timestamps, add overlapping rule counts, or treat every event of an unseen identity as
+unseen. Show **Application breakdown unavailable** (or **event share unavailable**) where
+these metrics cannot be calculated, retaining accurate affected-alert counts. This change
+does not extend future run storage or change the SQL contract. The published team phase,
+team readiness percentage and review note remain whole-team context, explicitly labeled
+while filtering; readiness alert lists and remaining-work estimates use selected alerts.
+Slides identify the application selection in their footer and label team context.
+
+All existing read-only, network, publication-isolation, escaping and CSP guarantees apply.
+The default with no filter retains the current complete-team behavior.

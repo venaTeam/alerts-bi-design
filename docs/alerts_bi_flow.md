@@ -211,6 +211,13 @@ A completed run is not yet visible to anyone outside the standardization team. A
 
 ## 11. The weekly schedule (design section 7.11)
 
+Portal clarification (2026-10-08): readers can select several applications above the team
+tabs. The GET selection follows every tab, week and alert link. Weekly summaries and
+history use the selected published alert identities. Daily application buckets and
+overlapping event unions are unavailable in existing storage and are labeled accordingly;
+no new analysis is triggered. Published team phase, readiness percentage and review notes
+remain labeled whole-team context. See the global-filter amendment in the canonical design.
+
 `alerts-bi weekly`, invoked daily, runs steps 1-9 for every team enrolled in the registry, once per completed Monday-to-Monday UTC week that has not been published yet, oldest first, with `run_at` set to the Monday boundary. It then performs step 10's publication itself when the run is healthy. An unhealthy week is held for an operator and the weeks after it are stored but not published; a newly enrolled team starts at its most recent completed week.
 
 ## After the MVP
