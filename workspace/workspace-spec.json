@@ -1,7 +1,7 @@
 {
   "kind": "workspace",
   "name": "Alerts BI workspace",
-  "summary": "Local non-Git parent for the four Alerts BI repositories. This routing file and WORKSPACE.json remain outside every repository.",
+  "summary": "Local non-Git navigation for admin, portal, design and the historical runs checkout.",
   "sources": [
     {
       "role": "design",
@@ -18,7 +18,7 @@
     },
     {
       "path": "alerts-bi-runs",
-      "role": "Analysis execution, HTTP trigger, weekly scheduling, SQL persistence and migrations; producer of shared and operations libraries.",
+      "role": "Historical source checkout; no maintained runtime after retirement cutover.",
       "owner": "venaTeam; individual owner not assigned"
     },
     {
@@ -28,7 +28,7 @@
     },
     {
       "path": "alerts-bi-admin",
-      "role": "Authenticated operator actions and completed-run review; consumes shared and operations.",
+      "role": "Unified operator UI/API, engine, migrations, weekly jobs, registry, mock tooling and shared/operations library producer.",
       "owner": "venaTeam; individual owner not assigned"
     }
   ],
@@ -36,26 +36,24 @@
     {
       "producer": "alerts-bi-design",
       "consumers": [
-        "alerts-bi-runs",
-        "alerts-bi-portal",
-        "alerts-bi-admin"
+        "alerts-bi-admin",
+        "alerts-bi-portal"
       ],
-      "description": "Pinned design, registry/API/SQL/output contracts; docs/upstream/manifest.json records commit and hashes."
+      "description": "Pinned design and registry/API/SQL/output contracts."
     },
     {
-      "producer": "alerts-bi-runs",
+      "producer": "alerts-bi-admin",
       "consumers": [
-        "alerts-bi-portal",
-        "alerts-bi-admin"
+        "alerts-bi-portal"
       ],
-      "description": "One SQL migration owner. shared wheel to both; operations wheel and registry artifact to admin only."
+      "description": "Sole migration owner and shared-library producer; published SQL views preserve reader compatibility."
     }
   ],
   "delivery_order": [
-    "Approve design/contracts",
-    "Build and verify runs migrations and shared libraries",
-    "Update pinned consumer wheels and test all apps",
-    "Publish exact compatible revisions in design/releases; deployment is separate"
+    "Review design retirement contract",
+    "Build and verify admin plus libraries",
+    "Verify portal with pinned shared wheel",
+    "Merge coordinated PRs only with authorization; execute documented cutover separately"
   ],
   "invariants": [
     "Do not initialize Git in this parent or add submodules. Keep this AGENTS.md local. Each child tracks its own AGENTS.md.",
