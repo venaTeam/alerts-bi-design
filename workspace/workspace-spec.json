@@ -6,7 +6,7 @@
     {
       "role": "design",
       "path": "alerts-bi-design/docs/alerts_bi_design.md",
-      "description": "Canonical design; read in full before repository work."
+      "description": "Canonical design; consult the source index and affected sections, expanding when dependencies or contradictions emerge."
     }
   ],
   "commands": [],
@@ -57,7 +57,7 @@
   ],
   "invariants": [
     "Do not initialize Git in this parent or add submodules. Keep this AGENTS.md local. Each child tracks its own AGENTS.md.",
-    "Read the target repository AGENTS.md and complete canonical design before changes. Work across repositories requires explicit ownership/contracts.",
+    "Read applicable AGENTS.md and source indexes first; consult relevant canonical requirements before changes. Work across repositories requires explicit ownership/contracts.",
     "KeepHQ and the original alerts BI checkout are outside this workspace. Preserve them.",
     "Each application builds from its own clone and committed lockfile. Never require a parent venv or PYTHONPATH sibling import.",
     "At most three useful subagents; no recursive delegation; lead owns integration. Do not automatically execute repository scripts at session start."

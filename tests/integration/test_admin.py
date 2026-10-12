@@ -6,6 +6,7 @@ import os
 import re
 from collections.abc import Iterator
 from datetime import datetime, timedelta
+from typing import cast
 
 import httpx
 import pytest
@@ -156,7 +157,7 @@ def client() -> Iterator[TestClient]:
 
 def _get(client: TestClient, url: str, *, headers: dict[str, str] | None = None) -> httpx.Response:
     """Legacy deep links redirect to the approved team workspace."""
-    return client.get(url, headers=headers, follow_redirects=True)
+    return cast(httpx.Response, client.get(url, headers=headers, follow_redirects=True))
 
 
 def token(client: TestClient, headers: dict[str, str] = ALICE) -> str:
@@ -178,7 +179,7 @@ def portal_week(tab: str = "") -> httpx.Response:
     app = build_portal(PortalSettings(sql=CONFIG.sql, database=DB))
     with TestClient(app, client=("127.0.0.1", 50000)) as portal:
         assert portal.post("/").status_code == 405
-        return portal.get(f"/teams/{TEAM}/weeks/{W2.date().isoformat()}{tab}")
+        return cast(httpx.Response, portal.get(f"/teams/{TEAM}/weeks/{W2.date().isoformat()}{tab}"))
 
 
 # ------------------------------------------------------------------ who may do what
