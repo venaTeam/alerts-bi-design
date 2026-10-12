@@ -14,17 +14,20 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sql", action="store_true", help="Check local disposable SQL metadata")
+    parser.add_argument(
+        "--console", action="store_true", help="Check the consolidated console routes"
+    )
     args = parser.parse_args()
+    from alerts_bi_admin.engine.api.app import build_app
+    from alerts_bi_admin.engine.config import ApiSettings, load_config
+    from alerts_bi_admin.engine.db.ledger import MIGRATIONS_DIR
+    from alerts_bi_admin.engine.db.migrate import heads
     from alerts_bi_operations.registry import SCHEMA_PATH
     from alerts_bi_operations.report.csv_export import (
         DAILY_METRIC_HEADERS,
         RULE_COUNT_HEADERS,
         WORKLIST_HEADERS,
     )
-    from alerts_bi_runs.api.app import build_app
-    from alerts_bi_runs.config import ApiSettings, load_config
-    from alerts_bi_runs.db.ledger import MIGRATIONS_DIR
-    from alerts_bi_runs.db.migrate import heads
 
     config = load_config()
     assert SCHEMA_PATH.read_bytes() == (ROOT / "contracts/teams.schema.json").read_bytes(), (
@@ -32,6 +35,25 @@ def main() -> None:
     )
     expected_api = json.loads((ROOT / "contracts/trigger-openapi.json").read_text("utf-8"))
     assert build_app(ApiSettings(config=config)).openapi() == expected_api, "Trigger API drift"
+    if args.console:
+        from alerts_bi_admin.app import build_admin
+        from alerts_bi_admin.config import AdminConfig, AdminSettings
+
+        contract = json.loads((ROOT / "contracts/console-http.json").read_text("utf-8"))
+        app = build_admin(
+            AdminSettings(AdminConfig(config.sql), config.sql.test_database, "contract-check-" * 3)
+        )
+        routes = {
+            (method.upper(), path)
+            for path, operations in app.openapi()["paths"].items()
+            for method in operations
+        }
+        for path in contract["read_routes"]:
+            assert ("GET", path) in routes, f"Missing console read: {path}"
+        for path in contract["write_routes"]:
+            assert ("POST", path) in routes, f"Missing console write: {path}"
+        assert ("GET", "/csrf") in routes
+        assert heads() == [contract["schema_head"]]
     outputs = json.loads((ROOT / "contracts/outputs.json").read_text("utf-8"))
     assert outputs["headers"] == {
         "DAILY_METRIC_HEADERS": list(DAILY_METRIC_HEADERS),
@@ -45,7 +67,9 @@ def main() -> None:
             relative
         )
     for name in ("Alerting_Guide_Appchi_EN.md", "what_is_an_incorrect_alert_EN.md"):
-        packaged = files("alerts_bi_runs").joinpath("resources", "guides", name).read_bytes()
+        packaged = (
+            files("alerts_bi_admin.engine").joinpath("resources", "guides", name).read_bytes()
+        )
         assert packaged == (ROOT / "docs" / name).read_bytes(), f"Guide drift: {name}"
     if args.sql:
         from alerts_bi_shared.db.connection import connect

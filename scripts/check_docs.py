@@ -13,7 +13,7 @@ def main() -> None:
         json.loads(path.read_text("utf-8"))
     assert (ROOT / "CLAUDE.md").read_text("utf-8").strip() == "@AGENTS.md"
     instructions = (ROOT / "AGENTS.md").read_text("utf-8")
-    assert "alerts_bi_design.md" in instructions and "in full" in instructions
+    assert "alerts_bi_design.md" in instructions and "canonical design" in instructions
     for relative in (
         "docs/alerts_bi_design.md",
         "docs/alerts_bi_flow.md",

@@ -9,29 +9,34 @@ data, so the portal's totals are checked against numbers the pipeline itself sto
 from __future__ import annotations
 
 import dataclasses
+import html
 import json
 import os
 import re
 import secrets
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from alerts_bi_admin.engine.config import load_config
+from alerts_bi_admin.engine.db.migrate import reset_test_database
+from alerts_bi_admin.engine.db.reader import grant_reader, read_only_problems
+from alerts_bi_admin.engine.db.repositories import PersistencePayload, RunIsPublished, persist_run
 from alerts_bi_admin.summary import _published_history, basis_changes
 from alerts_bi_operations.review.decisions import DecisionRefused, record_decision
 from alerts_bi_operations.review.publication import PublicationRefused, publish_run, unpublish_run
 from alerts_bi_portal.app import build_portal
+from alerts_bi_portal.application_filter import ApplicationFilter
 from alerts_bi_portal.config import PortalSettings
+from alerts_bi_portal.queries import team_reviews
 from alerts_bi_portal.summary_queries import load_portal_summary
-from alerts_bi_runs.config import load_config
-from alerts_bi_runs.db.migrate import reset_test_database
-from alerts_bi_runs.db.reader import grant_reader, read_only_problems
-from alerts_bi_runs.db.repositories import PersistencePayload, RunIsPublished, persist_run
 from alerts_bi_shared.config.sql import SqlConfig
 from alerts_bi_shared.db.connection import connect
 from alerts_bi_shared.insights import DailyPoint
-from alerts_bi_shared.ui.charts import TIMES
+from alerts_bi_shared.insights.labels import action
+from alerts_bi_shared.insights.summary import summarize
 from alerts_bi_shared.ui.explain import EN_DASH
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import DBAPIError
@@ -292,6 +297,8 @@ def _store(name: str, team: str, end: datetime, *, rich: bool = False) -> None:
         if rich
         else [sample_finding(run_id=run_id, key_field=f"{name}:only", row_count=5)],
     )
+    if name == "unpub":
+        payload.findings.append(sample_finding(run_id=run_id, application="unpublished-only"))
     with connect(CONFIG.sql, DB) as db:
         persist_run(db, payload)
 
@@ -640,10 +647,129 @@ def test_totals_match_the_stored_metrics_and_keep_v1_and_v2_apart(
     assert totals == stored == {"v1": (1114, 4), "v2": (13, 4)}
 
     page = portal.get(f"/teams/{TEAM}").text
-    assert "1,114</span>" in page and "13</span>" in page
-    assert "distinct alerts this week" in page
+    assert _cards(page) == [(4, 1114), (4, 13)]
     assert "per day" not in page
     assert "1,127" not in page, "v1 and v2 events are never added together"
+
+
+def _cards(page: str) -> list[tuple[int, int]]:
+    """(alerts, events) from each Overview card, v1 then v2."""
+    return [
+        (int(alerts.replace(",", "")), int(events.replace(",", "")))
+        for alerts, events in re.findall(
+            r'<span class="big">([\d,]+)</span><span class="sub">alerts</span></div>'
+            r'<div><span class="big">([\d,]+)</span><span class="sub">events</span>',
+            page,
+        )
+    ]
+
+
+def test_application_summary_and_history_match_selected_identities(reader: SqlConfig) -> None:
+    scope = ApplicationFilter(("checkout-svc", "sms-gateway"))
+    with connect(reader, DB) as db:
+        inputs = load_portal_summary(db, TEAM, _run_id("wk3"), scope)
+        reviews = team_reviews(db, TEAM, scope)
+    assert {(a.application, a.schema) for a in inputs.alerts} == {
+        ("checkout-svc", "v1"),
+        ("sms-gateway", "v2"),
+    }
+    assert (inputs.schemas["v1"].events, inputs.schemas["v1"].distinct_alerts) == (20, 1)
+    assert (inputs.schemas["v2"].events, inputs.schemas["v2"].distinct_alerts) == (3, 2)
+    assert inputs.schemas["v1"].rule_flagged_events is None
+    assert inputs.daily == ()
+    assert next(r.events for r in inputs.rules if r.rule_id == "R1") == 3
+    assert len(reviews) == 3
+    assert all(r.totals["v1"].events == 20 and r.totals["v2"].events == 3 for r in reviews)
+    assert "notif-dispatcher" in reviews[-1].applications.options
+    assert "unpublished-only" not in reviews[-1].applications.options
+    assert all(len(week.v1_rules) == 1 for week in inputs.history)
+    assert summarize(inputs).estimate.rules_left == 1
+
+
+@pytest.mark.parametrize(
+    "tab", ["", "fix", "volume", "dashboards", "migration", "history", "slides"]
+)
+def test_application_scope_survives_every_tab_and_week(portal: TestClient, tab: str) -> None:
+    selected = ["checkout-svc", "sms-gateway"]
+    page = _tab(portal, tab, apps=selected)
+    nav = re.search(r'<nav class="tabs".*?</nav>', page)
+    assert nav is not None
+    for href in re.findall(r'href="([^"]+)"', nav.group()):
+        assert parse_qs(urlsplit(html.unescape(href)).query)["apps"] == selected
+    menu = re.search(r'<ul class="menu-list filter-popover"[^>]*>.*?</ul>', page)
+    assert menu is not None
+    for href in re.findall(r'href="([^"]+)"', menu.group()):
+        assert parse_qs(urlsplit(html.unescape(href)).query)["apps"] == selected
+    if tab == "":
+        assert _cards(page) == [(1, 20), (2, 3)]
+    if tab == "fix":
+        listing = _alerts(page)
+        assert 'Alerts <span class="sub">2</span>' in listing
+        assert "notif-dispatcher" not in listing
+        links = re.findall(r'href="([^"]+/alert\?[^"]+)"', listing)
+        assert links
+        detail = portal.get(html.unescape(links[0]))
+        assert detail.status_code == 200
+        assert "apps=checkout-svc&amp;apps=sms-gateway" in detail.text
+    if tab == "slides":
+        assert "Application breakdown unavailable" in page
+        assert "Applications: checkout-svc, sms-gateway" in page
+
+
+def test_application_filter_composes_with_local_filters_paging_and_legacy_urls(
+    portal: TestClient,
+) -> None:
+    apps = ["notif-dispatcher", "email-worker", "sms-gateway", "checkout-svc"]
+    page = _alerts(_tab(portal, "fix", apps=apps, show="all"))
+    assert "1&ndash;3 of 5" in page
+    href = next(
+        html.unescape(link) for link in re.findall(r'href="([^"]+)"', page) if "page=2" in link
+    )
+    assert parse_qs(urlsplit(href).query)["apps"] == sorted(apps)
+    second = portal.get(href)
+    assert second.status_code == 200 and "4&ndash;5 of 5" in second.text
+    only = _alerts(_tab(portal, "fix", apps=apps, rule="R1", schema="v1"))
+    assert 'Alerts <span class="sub">2</span>' in only
+    redirect = portal.get(
+        f"/teams/{TEAM}", params={"apps": apps, "rule": "R1"}, follow_redirects=False
+    )
+    assert redirect.status_code == 303
+    assert parse_qs(urlsplit(redirect.headers["location"]).query)["apps"] == sorted(apps)
+    picker = portal.get(
+        f"/teams/{TEAM}/weeks",
+        params={"apps": apps, "week": str(W1.date()), "tab": "history"},
+        follow_redirects=False,
+    )
+    assert parse_qs(urlsplit(picker.headers["location"]).query)["apps"] == sorted(apps)
+
+
+@pytest.mark.parametrize(
+    "params", [{"scope": "selected"}, {"apps": "missing"}, {"apps": "' OR 1=1--<script>"}]
+)
+def test_empty_or_unknown_application_never_broadens_scope(
+    portal: TestClient, params: dict[str, Any]
+) -> None:
+    page = _tab(portal, "", **params)
+    assert _cards(page) == []
+    assert "No v1 alerts this week" in page and "No v2 alerts this week" in page
+    assert "<script>" not in page
+    assert 'Alerts <span class="sub">0</span>' in _alerts(_tab(portal, "fix", **params))
+    clear = re.search(r'<a class="app-reset" href="([^"]+)"', page)
+    assert clear is not None
+    assert _cards(portal.get(html.unescape(clear.group(1))).text) == [(4, 1114), (4, 13)]
+
+
+def test_detail_cannot_escape_selected_applications(portal: TestClient) -> None:
+    response = portal.get(
+        f"/teams/{TEAM}/weeks/{W3.date()}/alert",
+        params={
+            "schema": "v1",
+            "application": "checkout-svc",
+            "key": "checkout-svc:cart:node-1",
+            "apps": "queue",
+        },
+    )
+    assert response.status_code == 404
 
 
 def test_the_latest_week_is_the_default_and_every_week_is_addressable(portal: TestClient) -> None:
@@ -659,50 +785,64 @@ def test_the_latest_week_is_the_default_and_every_week_is_addressable(portal: Te
     assert picked.status_code == 303 and picked.headers["location"].endswith(str(W2.date()))
 
 
+def _tab(portal: TestClient, tab: str, week: datetime = W3, **params: Any) -> str:
+    path = f"/teams/{TEAM}/weeks/{week.date()}" + (f"/{tab}" if tab else "")
+    response = portal.get(path, params=params)
+    assert response.status_code == 200, (tab, response.text)
+    return str(response.text)
+
+
+def test_every_tab_is_addressable_and_renders_without_internals(portal: TestClient) -> None:
+    for tab in ("", "fix", "volume", "dashboards", "migration", "history", "slides"):
+        page = _tab(portal, tab)
+        assert 'class="tab on"' in page, tab
+        for internal in (_run_id("wk3"), "registry", "ruleset", "per day", "fake-model"):
+            assert internal not in page, (tab, internal)
+        text = re.sub(r"<[^>]+>", " ", page)
+        assert not re.search(r"\bR(10|[1-9])\b", text), (tab, "no rule id is shown")
+    assert portal.get(f"/teams/{TEAM}/weeks/{W3.date()}/nonsense").status_code == 404
+
+
+def test_the_week_menu_keeps_the_tab(portal: TestClient) -> None:
+    page = _tab(portal, "dashboards")
+    for week in (W1, W2, W3):
+        assert f'href="/teams/{TEAM}/weeks/{week.date()}/dashboards"' in page
+    assert "<select" not in page
+
+
 def test_history_has_one_point_per_published_week(portal: TestClient) -> None:
-    page = portal.get(f"/teams/{TEAM}").text
-    # Two schemas x two measures, three contiguous weeks each. Checked again for the team
-    # summary: its widgets draw bars (rect geometry), never a line, so the count is still
-    # exactly the four history lines.
+    page = _tab(portal, "history")
+    # Two schemas x two measures, three contiguous weeks each.
     assert page.count("<polyline") == 4
-    summary = page[page.index('id="summary"') : page.index("Over time")]
-    assert "<polyline" not in summary and "<rect" in summary
     assert page.count('class="dot v1') == 6 and page.count('class="dot v2') == 6
+    assert page.count(">Open</a>") == 2 and ">Viewing<" in page
+    assert "<polyline" not in _tab(portal, ""), "the Overview draws no history"
 
 
-def _worklist(page: str) -> str:
-    """The work list alone: the Summary above it quotes alert messages too."""
-    return page[page.index('id="worklist"') :]
+def _alerts(page: str) -> str:
+    """The alert list alone: the table above it names the same problems."""
+    return page[page.index('id="alerts"') :]
 
 
 def test_the_work_list_is_ordered_and_paginated_in_sql(portal: TestClient) -> None:
-    first = _worklist(portal.get(f"/teams/{TEAM}").text)
-    assert "Needs attention · 5" in first and "All alerts · 8" in first
-    assert "Showing 1&ndash;3 of 5" in first
+    first = _alerts(_tab(portal, "fix"))
+    assert 'Alerts <span class="sub">5</span>' in first
+    assert "1&ndash;3 of 5" in first
     order = [
         first.index(text)
         for text in ("Something went wrong", "Cart error rate", "Unhandled exception")
     ]
     assert order == sorted(order), "rule findings by event count, then model findings"
 
-    second = _worklist(portal.get(f"/teams/{TEAM}", params={"page": 2}).text)
-    assert "Showing 4&ndash;5 of 5" in second
+    second = _alerts(_tab(portal, "fix", page=2))
+    assert "4&ndash;5 of 5" in second
     assert "Nightly token cleanup" in second and "Something went wrong" not in second
 
-    everything = portal.get(
-        f"/teams/{TEAM}", params={"show": "all", "schema": "v2", "page": 2}
-    ).text
-    assert "Showing 4&ndash;4 of 4" in everything
+    everything = _alerts(_tab(portal, "fix", show="all", schema="v2", page=2))
+    assert "4&ndash;4 of 4" in everything
 
 
-# ------------------------------------------------------------------ the Summary section
-
-
-def _summary_html(page: str) -> str:
-    return page[page.index('id="summary"') : page.index("Over time")]
-
-
-def test_the_summary_totals_are_the_stored_weekly_totals(
+def test_the_stored_weekly_totals_reach_the_overview_and_the_fix_list(
     portal: TestClient, reader: SqlConfig
 ) -> None:
     with connect(reader, DB) as db:
@@ -731,99 +871,87 @@ def test_the_summary_totals_are_the_stored_weekly_totals(
         ("v2", "R8"): (2, 1),
         ("v2", "R9"): (2, 1),
     }
+    assert _cards(_tab(portal, "")) == [schemas["v1"], schemas["v2"]]
 
-    summary = _summary_html(portal.get(f"/teams/{TEAM}").text)
-    tiles = re.findall(
-        r'<span class="n">([\d,]+)</span><span class="u">distinct alerts this week</span>.*?'
-        r'<span class="n">([\d,]+)</span><span class="u">alert events this week</span>',
-        summary,
-    )
-    assert [(int(d.replace(",", "")), int(e.replace(",", ""))) for d, e in tiles] == [
-        schemas["v1"],
-        schemas["v2"],
+    page = _tab(portal, "fix")
+    table = page[page.index("What to change") : page.index('id="alerts"')]
+
+    def cells(rule: str) -> list[str]:
+        row = table[table.index(f'<span class="item">{action(rule)}') :]
+        return re.findall(r'<td class="num r">(.*?)</td>', row[: row.index("</tr>")])
+
+    assert cells("R1") == [
+        '2 alerts<span class="sub">595 events</span>',
+        '<span class="sub">—</span>',
     ]
-
-    table = summary[summary.index("Flagged by rule") : summary.index("Hidden by your own panels")]
-    shown = {
-        (schema, rule): (int(events.replace(",", "")), int(alerts.replace(",", "")))
-        for rule, schema, events, alerts in re.findall(
-            r'<tr><td><a href="[^"]*">(R\d+)</a></td><td>.*?</td>'
-            r'<td><span class="chip (v\d)">v\d</span></td>'
-            r'<td class="num">([\d,]+)</td><td class="num">([\d,]+)</td>',
-            table,
-        )
-    }
-    assert shown == rules
-    assert 'href="/teams/portal-team/weeks/2026-08-30?rule=R1#worklist"' in summary
-    assert "per day" not in summary and _run_id("wk3") not in summary
+    assert cells("R4") == [
+        '1 alert<span class="sub">592 events</span>',
+        '<span class="sub">—</span>',
+    ]
+    assert cells("R8") == ['<span class="sub">—</span>', "1 alert"]
+    assert table.index(action("R1")) < table.index(action("R4")), "most events first"
+    assert f'href="/teams/{TEAM}/weeks/2026-08-30/fix?rule=R1#alerts"' in table
 
 
-def test_why_flagged_offers_bars_and_a_donut_per_schema(portal: TestClient) -> None:
-    page = portal.get(f"/teams/{TEAM}").text
-    why = page[page.index("Why alerts were flagged") : page.index("Key findings")]
-    assert why.count('type="radio"') == 2 and ">Bars</label>" in why and ">Donut</label>" in why
-    assert 'class="view-bars"' in why and 'class="view-donut"' in why
-    donut = why[why.index('class="view-donut"') :]
-    # Both v1 rule-flagged alerts carry R1 first (one also R4): one full R1 ring.
-    assert 'aria-label="Appchi: 2 rule-flagged alerts"' in donut
-    assert donut.count('<path class="slice r1"') == 1 and 'fill-rule="evenodd"' in donut
-    assert "No rule-flagged v2 alerts this week." in donut
-    assert "<polyline" not in why
+def test_dashboards_say_not_measured_rather_than_zero(portal: TestClient) -> None:
+    page = _tab(portal, "dashboards")
+    unseen = page[page.index("On no dashboard") :]
+    assert "Not measured this week." in unseen, "no panel for either schema"
+    assert "None found" not in unseen
 
 
-def test_the_summary_says_not_measured_rather_than_zero(portal: TestClient) -> None:
-    summary = _summary_html(portal.get(f"/teams/{TEAM}").text)
-    unseen = summary[summary.index("Not on any of your dashboards") : summary.index("Migration")]
-    assert unseen.count("<b>Not measured this week</b>") == 2, "no panel for either schema"
-    assert "No dashboard supplied" not in unseen
-
-
-def test_the_summary_ends_with_two_presentation_slides(portal: TestClient) -> None:
-    summary = _summary_html(portal.get(f"/teams/{TEAM}").text)
-    slides = summary[summary.index(">Presentation</h3>") :]
+def test_the_slides_tab_holds_the_two_presentation_slides(portal: TestClient) -> None:
+    page = _tab(portal, "slides")
+    slides = page[page.index('<section class="slides"') :]
     assert slides.count('<section class="slide ') == 2
     assert "stands</h4>" in slides and "The week, day by day</h4>" in slides
-    assert "Biggest single alert" in slides and "What to fix" not in slides
-    assert "Top rules" not in slides and "<polyline" not in slides
-    # Both fixtures store non-zero day buckets for v1 and v2: two charts, no empty box.
     assert slides.count('<svg class="sl-chart"') == 2
-    assert "No v1 alerts this week" not in slides
-    assert "No v2 alerts this week" not in slides
     assert "week ending 30 Aug 2026 · Alerts BI" in slides
     assert _run_id("wk3") not in slides and "href=" not in slides
 
 
-def test_the_work_list_filters_by_state_and_rule(portal: TestClient) -> None:
-    page = portal.get(
-        f"/teams/{TEAM}", params={"show": "all", "state": "rule_flagged", "rule": "R1"}
-    ).text
-    listing = page[page.index('id="worklist"') :]
-    assert "Showing 1&ndash;2 of 2" in listing
-    assert "All alerts · 2" in listing
+def test_the_work_list_filters_by_state_and_problem(portal: TestClient) -> None:
+    listing = _alerts(_tab(portal, "fix", show="all", state="rule_flagged", rule="R1"))
+    assert "1&ndash;2 of 2" in listing and 'Alerts <span class="sub">2</span>' in listing
     assert "Something went wrong" in listing and "Cart error rate" in listing
     for other in ("Unhandled exception", "Nightly token cleanup", "SMS failure rate"):
         assert other not in listing, other
-    assert "Rule R1 · Generic message" in listing
+    banner = _tab(portal, "fix", rule="R1")
+    assert action("R1") in banner and "<b>Fix:</b>" in banner and "What to change" not in banner
 
-    readiness = portal.get(f"/teams/{TEAM}", params={"rule": "R9"}).text
-    listing = readiness[readiness.index('id="worklist"') :]
-    assert "Showing 1&ndash;1 of 1" in listing and "SMS failure rate" in listing
+    readiness = _alerts(_tab(portal, "fix", rule="R9"))
+    assert "1&ndash;1 of 1" in readiness and "SMS failure rate" in readiness
 
-    nothing = portal.get(f"/teams/{TEAM}", params={"state": "assessed_good", "rule": "R1"}).text
-    assert "Nothing matches this filter." in nothing
+    nothing = _tab(portal, "fix", state="assessed_good", rule="R1")
+    assert "Nothing matches." in nothing
 
-    assert portal.get(f"/teams/{TEAM}", params={"rule": "R11"}).status_code == 422
-    assert portal.get(f"/teams/{TEAM}", params={"state": "bad"}).status_code == 422
+    fix = f"/teams/{TEAM}/weeks/{W3.date()}/fix"
+    assert portal.get(fix, params={"rule": "R11"}).status_code == 422
+    assert portal.get(fix, params={"state": "bad"}).status_code == 422
+
+
+def test_old_work_list_links_open_the_fix_list(portal: TestClient) -> None:
+    moved = portal.get(f"/teams/{TEAM}", params={"rule": "R1"}, follow_redirects=False)
+    assert moved.status_code == 303
+    assert moved.headers["location"] == f"/teams/{TEAM}/weeks/2026-08-30/fix?rule=R1#alerts"
+    week = portal.get(
+        f"/teams/{TEAM}/weeks/{W2.date()}", params={"show": "all"}, follow_redirects=False
+    )
+    assert week.headers["location"].endswith(f"/weeks/{W2.date()}/fix?show=all#alerts")
+    picked = portal.get(
+        f"/teams/{TEAM}/weeks",
+        params={"week": str(W2.date()), "tab": "history"},
+        follow_redirects=False,
+    )
+    assert picked.headers["location"].endswith(f"/weeks/{W2.date()}/history")
 
 
 def test_paging_keeps_the_filters(portal: TestClient) -> None:
-    params = {"show": "all", "state": "assessed_good"}
-    first = portal.get(f"/teams/{TEAM}", params=params).text
-    listing = first[first.index('id="worklist"') :]
-    assert "Showing 1&ndash;3 of 4" in listing
-    assert "show=all&amp;state=assessed_good&amp;page=2#worklist" in listing
-    second = portal.get(f"/teams/{TEAM}", params={**params, "page": 2}).text
-    assert "Showing 4&ndash;4 of 4" in second
+    listing = _alerts(_tab(portal, "fix", show="all", state="assessed_good"))
+    assert "1&ndash;3 of 4" in listing
+    assert "show=all&amp;state=assessed_good&amp;page=2#alerts" in listing
+    second = _alerts(_tab(portal, "fix", show="all", state="assessed_good", page=2))
+    assert "4&ndash;4 of 4" in second
 
 
 PACE_TEAM = "pace-team"
@@ -886,34 +1014,33 @@ def test_the_estimate_is_drawn_from_published_weeks_only(portal: TestClient) -> 
         for name in PACE_WEEKS:
             publish_run(db, _run_id(name), published_by="operator")
 
-    page = portal.get(f"/teams/{PACE_TEAM}").text
-    progress = page[page.index("Migration progress") : page.index("Over time")]
+    with connect(CONFIG.sql, DB) as db:
+        latest = summarize(load_portal_summary(db, PACE_TEAM, _run_id("pace4")))
+        earliest = summarize(load_portal_summary(db, PACE_TEAM, _run_id("pace1")))
     # Three earlier weeks back to back; b, c and d stopped firing: pace 1 rule a week, and
     # the one rule left projects one week past the selected week.
-    assert "week of 6 Sep 2026" in progress
-    assert "3 rules stopped firing across the 3 earlier published weeks" in progress
-    assert "pace: 1 rule a week" in progress
-    assert "2 working days" in progress and "set for this team" in progress
-    assert "configured, not measured" in progress
-    assert "cleanup rather than migration" in progress
-    assert "registry" not in page and "per day" not in page
-
+    estimate = latest.estimate
+    assert estimate.projected_week_end == date(2026, 9, 6)
+    assert (estimate.retired, estimate.lookback_weeks, estimate.pace_per_week) == (3, 3, 1.0)
+    assert (estimate.effort_days, estimate.effort_is_override) == (2.0, True)
     # Only the selected week and the three before it are read: the oldest week's extra
     # rules (e..h) would otherwise be there to retire.
-    with connect(CONFIG.sql, DB) as db:
-        history = load_portal_summary(db, PACE_TEAM, _run_id("pace4")).history
-    assert [week.week_end for week in history] == [W1 - WEEK, W1, W2, W3]
+    assert [week.week_end for week in latest.inputs.history] == [W1 - WEEK, W1, W2, W3]
 
     # An earlier week sees only the weeks before it, never a later one: one earlier week.
-    earlier = portal.get(f"/teams/{PACE_TEAM}/weeks/{(W1 - WEEK).date()}").text
-    progress = earlier[earlier.index("Migration progress") : earlier.index("Over time")]
-    assert "No estimate:" in progress
-    assert (
+    assert earliest.estimate.projected_week_end is None
+    assert earliest.estimate.no_estimate_reason == (
         "Needs at least 2 earlier published weeks back to back; only 1 was published before "
         "this week."
-    ) in progress
-    assert "2 working days" in progress
-    assert f"4 v1 alert rules {TIMES} 0.5 working days each (default)" in progress
+    )
+    assert (earliest.estimate.effort_days, earliest.estimate.effort_is_override) == (2.0, False)
+
+    # The Migration tab shows facts only; the slides keep the projection.
+    migration = portal.get(f"/teams/{PACE_TEAM}/weeks/{W3.date()}/migration").text
+    assert "working day" not in migration and "week of" not in migration
+    slides = portal.get(f"/teams/{PACE_TEAM}/weeks/{W3.date()}/slides").text
+    assert "week of 6 Sep 2026" in slides
+    assert "registry" not in slides and "per day" not in slides
 
 
 BASIS_TEAM = "basis-team"
@@ -1014,9 +1141,12 @@ def test_the_view_and_the_operator_app_agree_on_when_measurement_changed(
 
     # The latest week's lookback stops at the ruleset change one week earlier, and the reason
     # says so rather than counting weeks.
-    page = portal.get(f"/teams/{BASIS_TEAM}").text
-    progress = page[page.index("Migration progress") : page.index("Over time")]
-    assert "measured the same way" in progress and "changed 1 week earlier" in progress
+    with connect(CONFIG.sql, DB) as db:
+        reason = summarize(load_portal_summary(db, BASIS_TEAM, _run_id("basis12")))
+    assert reason.estimate.no_estimate_reason is not None
+    assert "measured the same way" in reason.estimate.no_estimate_reason
+    assert "changed 1 week earlier" in reason.estimate.no_estimate_reason
+    page = portal.get(f"/teams/{BASIS_TEAM}/weeks/{ends[-1].date()}/migration").text
     assert "registry" not in page and "ruleset" not in page
 
 
@@ -1029,36 +1159,37 @@ def _alert(portal: TestClient, schema: str, application: str, key: str, week: da
     return str(response.text)
 
 
-def test_an_earlier_matching_row_is_labelled_apart_from_the_latest_firing(
+def test_an_earlier_matching_row_is_labelled_apart_from_the_latest_event(
     portal: TestClient,
 ) -> None:
     page = _alert(portal, "v1", "checkout-svc", "checkout-svc:cart:node-1")
-    assert "Matching firing · stored sample" in page
+    assert "Matched event · stored sample" in page
     assert "error occurred" in page
-    assert "Latest firing" in page and "Cart error rate above 2% over 5m on node-1" in page
-    assert "3 of 20 firings this week matched." in page
+    assert "Latest event" in page and "Cart error rate above 2% over 5m on node-1" in page
+    assert "3 of 20 events matched." in page
+    assert 'class="tab on" href="/teams/portal-team/weeks/2026-08-30/fix"' in page
 
 
 def test_a_rule_finding_explains_itself_and_shows_its_decision_history(portal: TestClient) -> None:
     page = _alert(portal, "v1", "notif-dispatcher", "notif-dispatcher:dispatch-queue:notif-node-2")
-    assert "&quot;something went wrong&quot;" in page and "592 of 592 firings" in page
-    assert "Next step:" in page
+    assert "something went wrong" in page and "592 of 592 events matched." in page
+    assert "<b>Fix:</b>" in page
     assert page.index("Raised in the review meeting.") < page.index("Team agreed to rewrite it.")
-    assert "Skipped: the rule findings above" in page
-    assert "not part of the v1 schema" in page
+    assert "Skipped: the problems above" in page
+    assert "<dt>Runbook</dt>" not in page, "a v1 alert has no runbook field to show"
 
 
 def test_a_model_finding_is_advisory_and_cites_its_principle(portal: TestClient) -> None:
     page = _alert(portal, "v1", "email-worker", "email-worker:template-renderer:email-node-3")
-    assert "Automated finding · advisory" in page
+    assert '<span class="chip model">Advisory</span>' in page and "advisory" in page
     assert "States the outcome, not the failure" in page
-    assert "Confidence: <b>high</b>" in page
+    assert "high confidence" in page
     assert "Reports an exception but not which send path failed." in page
 
 
 def test_needs_review_states_the_decision_a_person_must_make(portal: TestClient) -> None:
     page = _alert(portal, "v2", "push-gateway", "7e21c0d94ab35f68")
-    assert "Decision needed:" in page and "Confidence: <b>medium</b>" in page
+    assert "<b>Decide:</b>" in page and "medium confidence" in page
     assert "https://runbooks.internal/tokens" in page
 
 
@@ -1066,10 +1197,10 @@ def test_readiness_gaps_stay_apart_from_quality_and_untrusted_text_stays_inert(
     portal: TestClient,
 ) -> None:
     page = _alert(portal, "v2", "sms-gateway", "958e442f8ad32241")
-    quality = page[page.index("Quality findings") : page.index("Automated review")]
-    assert "No rule matched" in quality
-    readiness = page[page.index("v2 readiness") :]
-    assert "blocks phase 2" in readiness.lower() or "blocks phase-2" in readiness
+    quality = page[page.index('class="colmain"') : page.index("Automated review")]
+    assert "No problem found by the standard rules." in quality
+    readiness = page[page.index("Get v2 ready</h2>") :]
+    assert "blocks phase 2" in readiness
     assert "Runbook is being written." in readiness
     assert "<script>" not in page and "&lt;script&gt;" in page
     assert 'href="javascript:' not in page
@@ -1090,7 +1221,8 @@ def test_an_unknown_alert_is_not_found(portal: TestClient) -> None:
 
 
 def test_every_page_carries_the_security_headers(portal: TestClient) -> None:
-    for path in ("/", f"/teams/{TEAM}", "/healthz"):
+    week = f"/teams/{TEAM}/weeks/{W3.date()}"
+    for path in ("/", f"/teams/{TEAM}", f"{week}/fix", f"{week}/history", "/healthz"):
         response = portal.get(path)
         assert response.status_code == 200, path
         assert "default-src 'none'" in response.headers["content-security-policy"]
@@ -1120,11 +1252,11 @@ def test_portal_totals_equal_what_the_pipeline_stored_and_exported(reader: SqlCo
     import io
     from datetime import UTC
 
+    from alerts_bi_admin.engine.es.client import EsClient
+    from alerts_bi_admin.engine.es.reader import V1_INDEX
+    from alerts_bi_admin.engine.llm.fake import FakeLlmClient
+    from alerts_bi_admin.engine.run.orchestrator import execute_run
     from alerts_bi_operations.report.render import build_run_outputs
-    from alerts_bi_runs.es.client import EsClient
-    from alerts_bi_runs.es.reader import V1_INDEX
-    from alerts_bi_runs.llm.fake import FakeLlmClient
-    from alerts_bi_runs.run.orchestrator import execute_run
 
     es = EsClient(CONFIG.es)
     try:
@@ -1179,7 +1311,8 @@ def test_portal_totals_equal_what_the_pipeline_stored_and_exported(reader: SqlCo
     settings = PortalSettings(sql=reader, database=DB, page_size=50)
     with TestClient(build_portal(settings), client=LOCAL) as client:
         page = client.get("/teams/notifications-svc").text
-    assert f'<span class="n">{summary.v1_identities:,}</span>' in page
-    assert f'<span class="n">{summary.v1_rows:,}</span>' in page
-    assert f'<span class="n">{summary.v2_identities:,}</span>' in page
+    assert _cards(page) == [
+        (summary.v1_identities, summary.v1_rows),
+        (summary.v2_identities, summary.v2_rows),
+    ]
     assert summary.run_id not in page

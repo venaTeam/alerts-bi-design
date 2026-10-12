@@ -15,9 +15,9 @@ def main() -> int:
     parser.add_argument("--registry", type=Path, required=True)
     args = parser.parse_args()
     if not args.registry.is_file():
-        raise SystemExit("The runs registry artifact must exist")
+        raise SystemExit("The admin registry artifact must exist")
     os.environ["INTEGRATION_REGISTRY_PATH"] = str(args.registry.resolve())
-    from alerts_bi_runs.config import load_config
+    from alerts_bi_admin.engine.config import load_config
     from alerts_bi_shared.db.connection import connect
 
     config = load_config()
