@@ -6,13 +6,17 @@ import os
 import re
 from collections.abc import Iterator
 from datetime import datetime, timedelta
+from typing import cast
 
+import httpx
 import pytest
 from alerts_bi_admin.app import build_admin
 from alerts_bi_admin.config import AdminConfig, AdminSettings
-from alerts_bi_runs.config import load_config
-from alerts_bi_runs.db.migrate import reset_test_database
-from alerts_bi_runs.db.repositories import PersistencePayload, persist_run
+from alerts_bi_admin.engine.config import load_config
+from alerts_bi_admin.engine.db.migrate import reset_test_database
+from alerts_bi_admin.engine.db.repositories import PersistencePayload, persist_run
+from alerts_bi_portal.app import build_portal
+from alerts_bi_portal.config import PortalSettings
 from alerts_bi_shared.db.connection import connect
 from fastapi.testclient import TestClient
 
@@ -151,8 +155,13 @@ def client() -> Iterator[TestClient]:
         yield test_client
 
 
+def _get(client: TestClient, url: str, *, headers: dict[str, str] | None = None) -> httpx.Response:
+    """Legacy deep links redirect to the approved team workspace."""
+    return cast(httpx.Response, client.get(url, headers=headers, follow_redirects=True))
+
+
 def token(client: TestClient, headers: dict[str, str] = ALICE) -> str:
-    page = client.get(f"/teams/{TEAM}", headers=headers).text
+    page = _get(client, f"/teams/{TEAM}", headers=headers).text
     found = re.search(r'name="csrf" value="([0-9a-f]+)"', page)
     assert found, "the team page carries a form token"
     return found.group(1)
@@ -166,20 +175,27 @@ def publications() -> list[dict[str, object]]:
         )
 
 
+def portal_week(tab: str = "") -> httpx.Response:
+    app = build_portal(PortalSettings(sql=CONFIG.sql, database=DB))
+    with TestClient(app, client=("127.0.0.1", 50000)) as portal:
+        assert portal.post("/").status_code == 405
+        return cast(httpx.Response, portal.get(f"/teams/{TEAM}/weeks/{W2.date().isoformat()}{tab}"))
+
+
 # ------------------------------------------------------------------ who may do what
 
 
 def test_nobody_gets_in_without_the_login_proxys_identity(client: TestClient) -> None:
-    assert client.get("/").status_code == 401
+    assert _get(client, "/").status_code == 401
     assert client.post(f"/runs/{RUN1}/publish").status_code == 401
 
 
 def test_the_signed_in_operator_sees_every_team_and_run(client: TestClient) -> None:
-    home = client.get("/", headers=ALICE)
+    home = _get(client, "/", headers=ALICE)
     assert home.status_code == 200 and "Signed in as alice" in home.text
     assert "Checkout API" in home.text
-    team = client.get(f"/teams/{TEAM}", headers=ALICE).text
-    assert RUN1[:16] in team and RUN2[:16] in team and "not published" in team
+    team = _get(client, f"/teams/{TEAM}", headers=ALICE).text
+    assert RUN1[:16] in team and RUN2[:16] in team and "Unpublished" in team
 
 
 def test_a_write_without_a_valid_token_is_refused(client: TestClient) -> None:
@@ -217,6 +233,7 @@ def test_other_methods_are_refused(client: TestClient) -> None:
 def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     client: TestClient,
 ) -> None:
+    assert portal_week().status_code == 404
     csrf = token(client)
     first = client.post(
         f"/runs/{RUN1}/publish", headers=ALICE, data={"csrf": csrf, "note": "First week"}
@@ -225,6 +242,7 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     second = client.post(f"/runs/{RUN2}/publish", headers=ALICE, data={"csrf": csrf})
     assert second.status_code == 303
     assert [row["published_by"] for row in publications()] == ["alice", "alice"]
+    assert portal_week().status_code == 200
 
     refused = client.post(f"/runs/{RUN2}/publish", headers=ALICE, data={"csrf": csrf})
     assert "error=" in refused.headers["location"], "a refusal is shown, not raised"
@@ -260,8 +278,14 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     with connect(CONFIG.sql, DB) as db:
         decisions = db.query("SELECT finding_id, decided_by FROM finding_decisions")
     assert decisions == [{"finding_id": "R1", "decided_by": "alice"}]
-    findings = client.get(f"/runs/{RUN2}/findings", headers=ALICE).text
+    findings = _get(client, f"/runs/{RUN2}/findings", headers=ALICE).text
     assert "Agreed with the team" in findings
+    assert (
+        "Agreed with the team"
+        in portal_week(
+            "/alert?schema=v1&application=checkout-api&key=checkout-api%3Acart%3Anode-1"
+        ).text
+    )
 
     withdrawn = client.post(
         f"/runs/{RUN2}/withdraw", headers=ALICE, data={"csrf": csrf, "reason": "Wrong week"}
@@ -269,10 +293,11 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     assert withdrawn.status_code == 303
     last = publications()[-1]
     assert last["withdrawn_by"] == "alice" and last["withdrawn_reason"] == "Wrong week"
+    assert portal_week().status_code == 404
 
 
 def test_the_full_scorecard_renders_from_sql_with_its_own_policy(client: TestClient) -> None:
-    response = client.get(f"/runs/{RUN1}/scorecard", headers=ALICE)
+    response = _get(client, f"/runs/{RUN1}/scorecard", headers=ALICE)
     assert response.status_code == 200
     assert "<html" in response.text.lower()
     assert "style-src 'unsafe-inline'" in response.headers["content-security-policy"]
@@ -280,14 +305,14 @@ def test_the_full_scorecard_renders_from_sql_with_its_own_policy(client: TestCli
 
 
 def test_an_unknown_run_is_not_found(client: TestClient) -> None:
-    assert client.get("/runs/nope/scorecard", headers=ALICE).status_code == 404
+    assert _get(client, "/runs/nope/scorecard", headers=ALICE).status_code == 404
 
 
 # ------------------------------------------------------------------ the Summary page
 
 
 def test_the_summary_needs_the_login_proxys_identity(client: TestClient) -> None:
-    response = client.get(f"/teams/{TEAM}/summary")
+    response = _get(client, f"/teams/{TEAM}/summary")
     assert response.status_code == 401
     assert "content-security-policy" in response.headers
 
@@ -295,23 +320,25 @@ def test_the_summary_needs_the_login_proxys_identity(client: TestClient) -> None
 def test_the_summary_of_a_persisted_run_renders_for_the_signed_in_operator(
     client: TestClient,
 ) -> None:
-    response = client.get(f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE)
+    response = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE)
     assert response.status_code == 200
     page = response.text
     assert "Signed in as alice" in page
-    assert "script-src" not in response.headers["content-security-policy"]
-    assert "<script" not in page and " style=" not in page
+    assert "script-src 'self'" in response.headers["content-security-policy"]
+    assert '<script src="/assets/' in page and " style=" not in page
     assert "Something went wrong &lt;b&gt;now&lt;/b&gt;" in page
-    assert RUN0 in page and "never published" in page
+    assert RUN0 in page and "Unpublished" in page
     assert "<mark" in page and "a &lt; 3" in page, "panel SQL is escaped and marked"
     for run_id in (RUN0, RUN1, RUN2):
-        assert f'<option value="{run_id}"' in page, "the run picker lists the team's runs"
-    assert f'<option value="{OTHER}"' not in page
+        assert f"run_id={run_id}" in page, "the team table links to each run"
+    assert f"run_id={OTHER}" not in page
 
 
-def test_the_summary_defaults_to_the_latest_completed_run(client: TestClient) -> None:
-    page = client.get(f"/teams/{TEAM}/summary", headers=ALICE).text
-    assert f'<option value="{RUN2}" selected>' in page
+def test_the_workspace_defaults_to_the_latest_run_including_failures(client: TestClient) -> None:
+    page = _get(client, f"/teams/{TEAM}/summary", headers=ALICE).text
+    selected = page[page.index('id="selected-run"') :]
+    assert FAILED in selected and "Elasticsearch unreachable" in selected
+    assert "Only completed runs can be published" in selected
 
 
 def test_the_summary_of_a_published_week_reads_its_published_history(client: TestClient) -> None:
@@ -322,8 +349,8 @@ def test_the_summary_of_a_published_week_reads_its_published_history(client: Tes
             {"team": TEAM},
         )
     assert published is not None, "the publishing test above left a week published"
-    page = client.get(f"/teams/{TEAM}/summary?run_id={published['run_id']}", headers=ALICE)
-    assert page.status_code == 200 and "published</span>" in page.text
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={published['run_id']}", headers=ALICE)
+    assert page.status_code == 200 and "Published</span>" in page.text
     assert "This week is not published" not in page.text
     assert "none was published before this week" in page.text, (
         "one published week: no earlier week to measure a pace from"
@@ -331,17 +358,17 @@ def test_the_summary_of_a_published_week_reads_its_published_history(client: Tes
 
 
 def test_the_admin_summary_renders_the_shared_widgets(client: TestClient) -> None:
-    page = client.get(f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
     for title in ("Why alerts were flagged", "How often alerts fire", "Migration progress"):
         assert title in page
     assert "per day" in page, "the admin surface shows per-day rates"
     assert f"/teams/{TEAM}/summary?run_id={RUN0}&amp;rule=R1#worklist" in page
     assert "This week is not published" in page, "the estimate reads published weeks only"
-    assert "<script" not in page and " style=" not in page
+    assert '<script src="/assets/' in page and " style=" not in page
 
 
 def test_the_admin_summary_ends_with_two_presentation_slides(client: TestClient) -> None:
-    page = client.get(f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
     slides = page[page.index(">Presentation</h3>") : page.index('id="days"')]
     assert slides.count('<section class="slide ') == 2
     assert "stands</h4>" in slides and "The week, day by day</h4>" in slides
@@ -356,36 +383,37 @@ def test_the_admin_summary_ends_with_two_presentation_slides(client: TestClient)
 
 def test_the_work_list_sorts_by_events_or_application(client: TestClient) -> None:
     base = f"/teams/{TEAM}/summary?run_id={RUN0}&schema=v1"
-    by_app = client.get(base + "&sort=application", headers=ALICE).text
+    by_app = _get(client, base + "&sort=application", headers=ALICE).text
     assert '<option value="application" selected>' in by_app
-    assert client.get(base + "&sort=bogus", headers=ALICE).status_code == 422
+    assert _get(client, base + "&sort=bogus", headers=ALICE).status_code == 422
 
 
 def test_an_unknown_run_or_another_teams_run_is_not_found(client: TestClient) -> None:
-    assert client.get(f"/teams/{TEAM}/summary?run_id=nope", headers=ALICE).status_code == 404
-    assert client.get(f"/teams/{TEAM}/summary?run_id={OTHER}", headers=ALICE).status_code == 404
-    assert client.get("/teams/no-such-team/summary", headers=ALICE).status_code == 404
+    assert _get(client, f"/teams/{TEAM}/summary?run_id=nope", headers=ALICE).status_code == 404
+    assert _get(client, f"/teams/{TEAM}/summary?run_id={OTHER}", headers=ALICE).status_code == 404
+    assert _get(client, "/teams/no-such-team/summary", headers=ALICE).status_code == 404
 
 
-def test_a_run_that_did_not_complete_is_not_found(client: TestClient) -> None:
-    assert client.get(f"/teams/{TEAM}/summary?run_id={FAILED}", headers=ALICE).status_code == 404
-    latest = client.get(f"/teams/{TEAM}/summary", headers=ALICE).text
-    assert f'value="{FAILED}"' not in latest, "the picker offers completed runs only"
+def test_a_failed_run_is_visible_with_retry_and_no_publication(client: TestClient) -> None:
+    response = _get(client, f"/teams/{TEAM}/summary?run_id={FAILED}", headers=ALICE)
+    assert response.status_code == 200
+    assert "Retry run" in response.text and "Elasticsearch unreachable" in response.text
+    assert f'action="/runs/{FAILED}/publish"' not in response.text
 
 
 def test_the_work_list_filters_by_state_schema_and_rule(client: TestClient) -> None:
     base = f"/teams/{TEAM}/summary?run_id={RUN0}"
-    everything = client.get(base, headers=ALICE).text
+    everything = _get(client, base, headers=ALICE).text
     assert "Showing 1&ndash;4 of 4" in everything
-    flagged = client.get(base + "&state=rule_flagged&rule=R1", headers=ALICE).text
+    flagged = _get(client, base + "&state=rule_flagged&rule=R1", headers=ALICE).text
     assert "Showing 1&ndash;1 of 1" in flagged
     worklist = flagged[flagged.index('id="worklist"') :]
     assert "Something went wrong" in worklist and "Disk full" not in worklist
-    v2 = client.get(base + "&schema=v2", headers=ALICE).text
+    v2 = _get(client, base + "&schema=v2", headers=ALICE).text
     assert "Showing 1&ndash;1 of 1" in v2 and "Payment errors" in v2
     assert "/findings" in v2, "each row links to the findings and decisions page"
     for bad in ("&state=bogus", "&schema=v3", "&rule=R11", "&rule=P1"):
-        assert client.get(base + bad, headers=ALICE).status_code == 422
+        assert _get(client, base + bad, headers=ALICE).status_code == 422
 
 
 def test_the_summary_is_read_only(client: TestClient) -> None:
@@ -393,7 +421,7 @@ def test_the_summary_is_read_only(client: TestClient) -> None:
     assert client.put(f"/teams/{TEAM}/summary", headers=ALICE).status_code == 405
 
 
-def test_the_team_page_and_dashboard_link_to_the_summary(client: TestClient) -> None:
-    assert f"/teams/{TEAM}/summary" in client.get("/", headers=ALICE).text
-    team = client.get(f"/teams/{TEAM}", headers=ALICE).text
-    assert f"/teams/{TEAM}/summary?run_id={RUN0}" in team
+def test_the_dashboard_and_run_history_link_to_the_team_workspace(client: TestClient) -> None:
+    assert f'href="/teams/{TEAM}?tab=overview"' in _get(client, "/", headers=ALICE).text
+    team = _get(client, f"/teams/{TEAM}", headers=ALICE).text
+    assert f"run_id={RUN0}" in team

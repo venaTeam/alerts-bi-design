@@ -15,3 +15,7 @@ they never rewrite a quality state or transfer to a changed key. See design sect
 Run `python scripts/check_contracts.py` in an integration environment with all application
 wheels installed. `--sql` additionally compares the real disposable database metadata.
 Expected contracts are not regenerated as a way to make a failing check pass.
+
+The 2026-10-08 console retains trigger payloads and output filenames behind operator authentication. `trigger-openapi.json` remains the compatibility payload baseline; deployment security and UI routes are defined by `console-http.json`. The legacy factory is not a deployment entry point.
+
+Current producer: admin owns registry artifacts, execution adapters and the unchanged migration tree; portal consumes the shared library and published SQL views. Runs references in recorded source revisions are historical provenance.

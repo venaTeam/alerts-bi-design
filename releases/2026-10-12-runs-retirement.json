@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-12",
+  "status": "PRs delivered; not merged, deployed, stopped or archived",
+  "change": "Admin owns the unified application, engine, migrations, weekly jobs, registry, libraries and mock tooling",
+  "branch": "codex/retire-runs",
+  "tested_revisions_before_this_evidence_commit": {
+    "design": "12cdf50966870582954773e0dec5a3d3d09d210c",
+    "admin": "25f5b189e610d1e51a5811982f04d7b73e7d6d6f",
+    "portal": "b09fc2cb21e2f7bda4877ff22c12b7fc96728752",
+    "runs": "88bab21a9d4f336c3ee8679c3d06691e09c9da61"
+  },
+  "design_snapshot_revision": "821daa350cc2e99405cba76dbb379cc520750b48",
+  "pull_requests": {
+    "design": "https://github.com/venaTeam/alerts-bi-design/pull/1",
+    "admin": "https://github.com/venaTeam/alerts-bi-admin/pull/2",
+    "portal": "https://github.com/venaTeam/alerts-bi-portal/pull/2",
+    "runs": "https://github.com/venaTeam/alerts-bi-runs/pull/2"
+  },
+  "schema_head": "008_measurement_basis",
+  "libraries": {
+    "alerts-bi-shared": "0.1.3",
+    "alerts-bi-operations": "0.1.3"
+  },
+  "local_artifact_sha256": {
+    "admin/alerts_bi_admin-0.1.0-py3-none-any.whl": "6288ebed5b576c5d349b1832d775719d376498b033616de98050e401a54c1234",
+    "admin/alerts_bi_admin-0.1.0.tar.gz": "fb520a4cd0529e8f62cfab66a0e6e03ae907329312eace0073948359e8fcdb4b",
+    "admin/alerts_bi_operations-0.1.3-py3-none-any.whl": "968538ff703a6f097e168cb2bf283b9642bfa606c2e0995ed330caeb7fb6fea1",
+    "admin/alerts_bi_operations-0.1.3.tar.gz": "63527608f0c198437d41d65fbdec2d18452539272ad70e5dfd22865816c8bdb5",
+    "admin/alerts_bi_shared-0.1.3-py3-none-any.whl": "97a23816c668f50c7da83a4391cbdf54cfecc417861c4646ccca3b61a5666af9",
+    "admin/alerts_bi_shared-0.1.3.tar.gz": "4578cbfc69cf319cdd72a8768a52709908567db8e299105ecb8e9271f5e1c85d",
+    "portal/alerts_bi_portal-0.1.0-py3-none-any.whl": "75c9574bccbf40b78a5a60445f5b1c2a487ebfda0bba2bf427d83ae666d102c6",
+    "portal/alerts_bi_portal-0.1.0.tar.gz": "ca77cab9ff0b906fabadc695aa3b579d066cd36cabea4878625c250a846d8399"
+  },
+  "local_admin_image_id": "sha256:1b8a889d04a4a896007e33bfb1f029f20726ffc910c9c9a560afe2032c4b6b1b",
+  "verification": {
+    "admin_pytest": {
+      "passed": 976,
+      "skipped": 0,
+      "seconds": 85.27,
+      "revision": "3bc898d872371f626eafad4c60e33212ed2edb59",
+      "later_change": "25f5b18 only adds the migrated CI workflow; runtime and tests are unchanged"
+    },
+    "standalone_admin_archive_units": {
+      "passed": 858,
+      "skipped": 0
+    },
+    "portal_units": {
+      "passed": 270,
+      "skipped": 0
+    },
+    "installed_cross_app": {
+      "passed": 77,
+      "skipped": 0,
+      "seconds": 14.61
+    },
+    "ruff_and_format": "passed in admin, portal and design",
+    "ci_ownership": "Moved the existing unit/build GitHub Actions workflow from runs to admin; runs no longer builds the retired producer",
+    "strict_mypy": {
+      "admin_files": 197,
+      "portal_files": 24,
+      "design_files": 12
+    },
+    "contracts": "API, console routes, CSV, SQL views, registry schema, migration/revision and guide bytes match",
+    "immutable_imports": "22 applied SQL/revision, guide and fixture files match their recorded source SHA-256",
+    "builds": "Admin, shared, operations and portal wheels/sdists built; final admin Docker image built and unified CLI smoke passed",
+    "standalone_install": "Extracted admin sdist installs with frozen lockfile offline; all 858 units pass without any runs checkout/package",
+    "installed_commands": "Outside source tree: no alerts_bi_runs module; src.db.ledger bridge; db status/setup (already current), registry check, weekly dry-run and weekly-status pass",
+    "scheduler_guard": "An intentionally Tuesday-aligned published fixture correctly returned blocked; a fresh team produced a Monday-aligned due week",
+    "workflow": "Real SQL tests cover triggering, scheduling, fresh/idempotent migrations, publication/withdrawal, append-only decisions, exports, auth and CSRF; cross-app HTTP flow checks portal visibility",
+    "ui": "Noneditable wheel previews on 8310/8311: Teams, team run history, Overview/Findings/Decisions/Activity, New run cancel, Schedule/global Decisions, published portal review. Desktop and 390x844 mobile inspected; no horizontal page overflow or admin browser errors observed. Viewport restored.",
+    "hosted_admin_ci": {
+      "revision": "25f5b189e610d1e51a5811982f04d7b73e7d6d6f",
+      "push": "SUCCESS",
+      "pull_request": "SUCCESS",
+      "runs": [
+        "https://github.com/venaTeam/alerts-bi-admin/actions/runs/38230860959",
+        "https://github.com/venaTeam/alerts-bi-admin/actions/runs/38230861523"
+      ]
+    }
+  },
+  "environment": {
+    "python": "3.13.5 on Windows; Docker Python 3.12",
+    "sql": "Real local SQL Server; only disposable alerts_bi_test reset",
+    "elasticsearch": "Existing seeded local mock reused; no reseed or reset",
+    "model": "Deterministic fake LLM in integration/acceptance; no live model call",
+    "existing_services": "No service stopped; existing local SQL/ES started for verification; separate preview processes on 8310/8311"
+  },
+  "limits": [
+    "No production or cluster deployment validation; checked-in manifests retain image/config placeholders and weekly starts suspended",
+    "Existing Starlette/httpx deprecation warning; coordinated invocation also warns about an already-imported anyio module",
+    "Consumer snapshots pin 821daa3; later design commits only change test typing, workspace navigation and release evidence",
+    "Original dirty checkouts and excluded KeepHQ preserved"
+  ],
+  "cutover_document": "docs/runs-retirement.md",
+  "merge_order": [
+    "design",
+    "admin",
+    "portal",
+    "runs retirement notice"
+  ],
+  "archival": "Only after authorized cutover, a verified scheduled cycle, consumer/pipeline audit and agreed rollback retention; explicit authorization still required"
+}
