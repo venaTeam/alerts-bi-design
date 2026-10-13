@@ -121,3 +121,34 @@ and the real-SQL concurrency cases are unchanged. The complete 915-test unit sui
 again, and all four output-path cases passed with an intentionally unavailable `SQL_HOST`.
 Both Linux/Python 3.12 GitHub checks passed on `390dfba`: [push run](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38401655296)
 and [PR run](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38401662314).
+
+## Standalone report review follow-up — 2026-10-13
+
+Addressed the duplicate [standalone-report P2 findings](https://github.com/venaTeam/alerts-bi-admin/pull/4#discussion_r4258975601).
+The previous concurrency checks missed `report`: it read SQL without the shared lock,
+then could recreate the configured report files after deletion succeeded. A new real-SQL
+regression paused after `build_run_outputs` returned, before directory creation/writes;
+before the fix deletion returned 303 and reporting rewrote all four files.
+
+Admin fix `cae0fa8` takes the existing SQL session lock before standalone report run-id/team lookup
+through the last file write. The busy message includes active reporting. Both selectors
+and release after an injected write failure have regression coverage. No migration, library,
+output payload or portal contract changed. Canonical contract `ff4be6e` is pinned in admin;
+updated CLI clients still need to roll out alongside the app.
+
+Executed verification:
+
+- Full suite: **1,054 passed**, no skips, one existing Starlette/httpx warning.
+- After the final busy-message and formatting edits, all **57 console/API integration
+  tests passed** again. All four output-path unit cases passed with an unavailable SQL host.
+- Ruff lint/format, strict mypy (202 source files), lockfile, canonical documentation,
+  producer contracts including SQL views, and standalone build passed.
+- A separate installed `report` CLI process paused after SQL rendering against disposable
+  `alerts_bi_test`. Confirmed deletion through the live browser returned **409**, including
+  the report-busy message. After reporting completed, browser deletion succeeded. Final
+  SQL/disk checks confirmed the run and configured report directory were absent, while
+  a neighboring run remained. The temporary listener and CLI process stopped.
+- Local screenshots: admin task worktree `out/report-race-refused.png` and
+  `out/report-race-deleted.png`.
+
+Both PRs remain unmerged; deployment was not performed.
