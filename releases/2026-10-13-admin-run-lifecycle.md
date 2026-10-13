@@ -113,3 +113,11 @@ Verification on the same disposable SQL/local Elasticsearch environment:
   `out/cli-race-delete-succeeded.png`. The verification CLI and temporary listener stopped.
 
 Both existing PRs are updated; merging and deployment remain outside this task's authority.
+
+CI caught two output-path unit cases that mocked the data connection but not the new
+execution-lock connection. The available local SQL Server masked this unit-test isolation
+gap. Admin commit `390dfba` stubs both adapters for these path-only tests; production code
+and the real-SQL concurrency cases are unchanged. The complete 915-test unit suite passed
+again, and all four output-path cases passed with an intentionally unavailable `SQL_HOST`.
+Both Linux/Python 3.12 GitHub checks passed on `390dfba`: [push run](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38401655296)
+and [PR run](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38401662314).
