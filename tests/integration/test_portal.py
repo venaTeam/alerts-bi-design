@@ -1253,14 +1253,13 @@ def test_portal_totals_equal_what_the_pipeline_stored_and_exported(reader: SqlCo
     from datetime import UTC
 
     from alerts_bi_admin.engine.es.client import EsClient
-    from alerts_bi_admin.engine.es.reader import V1_INDEX
     from alerts_bi_admin.engine.llm.fake import FakeLlmClient
     from alerts_bi_admin.engine.run.orchestrator import execute_run
     from alerts_bi_operations.report.render import build_run_outputs
 
     es = EsClient(CONFIG.es)
     try:
-        if not es.index_exists(V1_INDEX):
+        if not es.index_exists(CONFIG.es.v1_index):
             pytest.skip("mock Elasticsearch has no appchi-v1 index")
     except Exception as exc:  # pragma: no cover - environment dependent
         pytest.skip(f"mock Elasticsearch is not reachable: {exc}")
