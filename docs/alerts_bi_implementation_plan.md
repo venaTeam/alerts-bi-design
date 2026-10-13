@@ -1,5 +1,12 @@
 # Alerts BI — Implementation Blueprint
 
+## Async manual execution amendment — 2026-10-13
+
+Implement the [async run contract](async-runs.md): additive migration 009, durable admission and
+idempotency, one independently supervised run-worker, shared SQL manual gate, short status reads,
+accessible completion polling and explicit restart recovery. Admin-generated run output contains
+three CSV files; authenticated HTML renders on demand. Keep synchronous POST /runs compatibility.
+
 ## Source ownership amendment — 2026-10-12
 
 Admin owns execution, migrations, weekly jobs, registry and library builds under `alerts_bi_admin.engine`; commands use `alerts-bi-admin`. The previous runs ownership and runtime-wheel references below are historical. Product behavior, wire payloads, SQL contracts and outputs are unchanged. See [retirement and cutover](runs-retirement.md).

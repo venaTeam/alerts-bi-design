@@ -1,5 +1,13 @@
 # Alerts BI — Design Document
 
+## Asynchronous manual runs — 2026-10-13
+
+The product owner approved durable background manual execution, completion polling and removal
+of generated per-run HTML. [The async run contract](async-runs.md) defines acceptance, worker
+coordination, interruption recovery, API compatibility, output storage and rollout. It supersedes
+the synchronous browser and automatic four-file writing requirements below. Migration 009 adds
+job state; SQL report data, published views, scoring and immutable migrations 001–008 are unchanged.
+
 ## Complete runs retirement — 2026-10-12
 
 The product owner requested complete source and service consolidation into `alerts-bi-admin`.

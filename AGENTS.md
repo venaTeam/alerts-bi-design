@@ -9,6 +9,7 @@ Canonical product design, contracts, accepted decisions, and coordinated release
 - design: `docs/alerts_bi_flow.md` — Approved runtime flow.
 - design: `docs/alerts_bi_implementation_plan.md` — Implementation blueprint.
 - design: `docs/outputs.md` — Output and API meanings.
+- design: `docs/async-runs.md` — Durable manual submissions, worker/recovery, HTTP compatibility and output storage.
 
 ### Verification
 
