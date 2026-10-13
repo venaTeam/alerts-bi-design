@@ -34,6 +34,32 @@ Unhealthy results still receive the existing assessment retry policy. Resumable 
 must be tied to exact run/version inputs, remain private until atomic completion, and
 never expose incomplete scans or change model retry/audit semantics.
 
+Weekly executions and durable manual jobs checkpoint completed deterministic analysis in
+private `run_analysis_checkpoints` rows. The versioned compressed JSON contains identity
+facts, representative/sample evidence, daily counts and finalized suppression outcomes;
+it never contains an executable object serialization. The run identity covers registry,
+window, model, rules and application versions; a separate hash covers ES URL/index names,
+parser version and checkpoint format. Fresh synchronous manual runs still scan ES.
+Healthy atomic persistence discards its retry checkpoint. Explicit run deletion includes
+the checkpoint. Failed/interrupted scans never create one. This is execution-state cleanup,
+not a historical-data retention policy.
+
+Migration 012 adds and backfills summary JSON, narrow list rows, rule membership and
+v1-rule hashes, with application day facts captured on new executions. Migration 013 adds
+private retry checkpoints. Backfill processes runs individually within the migration
+transaction: rehearse upgrade duration, log growth and blocking on a representative copy
+before scheduling production migration. Neither migration removes historical facts.
+Shared 0.1.4 and operations 0.2.1 are the coordinated library versions. Portal readiness
+checks all eleven published-only views. Unpublish/replace is visible immediately because
+every request rechecks SQL publication views; only decoded immutable JSON is cached, at
+most 64 entries of 256 KiB each. Evidence stays on detail/page reads and CSV exports.
+
+New cursor links bind navigation to the run and filters and use SQL seek predicates;
+the ordinary run/publication predicates apply independently of the cursor. Existing
+numbered-page bookmarks remain supported. Equal event counts preserve identity ordering.
+Application-filtered charts use exact stored daily unions when available; old weeks
+without those facts continue to show an unavailable measurement.
+
 ## Verification and rollout
 
 Compare stored summaries and filtered combinations against complete-input calculations.
