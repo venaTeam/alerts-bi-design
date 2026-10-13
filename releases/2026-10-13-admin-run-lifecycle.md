@@ -5,7 +5,9 @@ removal of the admin publication gap override. Canonical intent is design sectio
 and decision 004. Skipping/deleting weeks can still create gaps; the admin retains its
 missing-week check, while CLI recovery and scheduler retention exceptions remain.
 
-## Tested revisions and ownership
+The concurrency follow-up below supersedes the initial locking coverage and tested heads.
+
+## Initial tested revisions and ownership
 
 - Admin base: `d93865fd0e91720bff00ced531a06c8033decea2`.
 - Admin implementation: `2f62e7c`; pinned inputs commit: `d3dec4d`.
@@ -16,7 +18,7 @@ missing-week check, while CLI recovery and scheduler retention exceptions remain
   orphan inserts; only a connection/run-scoped whole-run deletion allowance permits
   decision cleanup. Ordinary decision updates/deletes remain rejected.
 
-## Executed verification
+## Initial executed verification
 
 On Python 3.13 with Poetry 2.3.1, locked dependencies, real local SQL Server and the existing
 Elasticsearch mock; writes/resets targeted only disposable `alerts_bi_test`.
@@ -73,3 +75,41 @@ week can be recreated. Rolling back the application does not remove the additive
 PRs: [admin #4](https://github.com/venaTeam/alerts-bi-admin/pull/4) and
 [design #4](https://github.com/venaTeam/alerts-bi-design/pull/4). Both use
 `codex/admin-weekly-delete`; neither has been merged by this task.
+
+## Concurrency review follow-up — 2026-10-13
+
+Addressed [the admin P2 finding](https://github.com/venaTeam/alerts-bi-admin/pull/4#discussion_r4258205547).
+The original 1,044-test run checked held locks directly and missed a real manual CLI rerun.
+A new regression reproduced the failure on real SQL/Elasticsearch: pause `--no-llm` before
+persistence, delete the completed stored run (303), then observe the CLI reinsert the same
+deterministic id and rewrite reports.
+
+Admin fix `e729d31` makes manual CLI and HTTP/API runs take the existing `alerts-bi-weekly`
+SQL session lock before scanning, retaining it through persistence and all report writing.
+The scheduler and deletion already take that resource. The lock uses its own connection,
+so data commits and model-audit lock release cannot end protection early. HTTP contention
+returns 409, CLI contention fails promptly, and failures release the lock. Update manual
+CLI clients alongside the app; older CLI versions remain uncoordinated. No migration,
+portal, library, API payload or resource-name change was introduced by this follow-up.
+Admin snapshot `ec9f9ba` pins canonical contract `e57be7c775258f72b114575f5229f530383ab00e`.
+
+Verification on the same disposable SQL/local Elasticsearch environment:
+
+- Full unit/integration/acceptance suite: **1,051 passed**, no skips, one existing
+  Starlette TestClient/httpx deprecation warning.
+- Six real CLI rerun cases pause before scanning, persistence and report writing,
+  with `--no-llm` and `--fake-llm`; independent SQL sessions must refuse deletion and a
+  competing API run, then allow deletion after the rerun finishes. A seventh case checks
+  lock release after a failed CLI execution.
+- After correcting a strict-mypy test import, all seven focused cases passed again.
+  Production logic did not change after the full suite. Ruff lint/format, strict mypy
+  (202 source files), lockfile, canonical/producer contracts and standalone build passed.
+- A separate process invoked the installed CLI against `alerts_bi_test`, pausing before
+  persistence with assessment off. The real browser showed the existing run as completed,
+  submitted confirmed deletion and received **409**. After resuming and joining the CLI,
+  browser deletion succeeded. A subsequent browser fake-model trigger and deletion also
+  succeeded. SQL/disk checks confirmed both runs were absent and a neighboring run survived.
+- Local screenshots: admin task worktree `out/cli-race-delete-refused.png` and
+  `out/cli-race-delete-succeeded.png`. The verification CLI and temporary listener stopped.
+
+Both existing PRs are updated; merging and deployment remain outside this task's authority.
