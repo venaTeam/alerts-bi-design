@@ -69,3 +69,7 @@ Deletion cannot restore human decisions. SQL cleanup is atomic; file cleanup fol
 commit and reports failure distinctly. Shared caches/prompt artifacts survive, and custom
 CLI export paths are not tracked for cleanup. Scheduler enrollment remains; a deleted due
 week can be recreated. Rolling back the application does not remove the additive migration.
+
+PRs: [admin #4](https://github.com/venaTeam/alerts-bi-admin/pull/4) and
+[design #4](https://github.com/venaTeam/alerts-bi-design/pull/4). Both use
+`codex/admin-weekly-delete`; neither has been merged by this task.
