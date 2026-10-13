@@ -44,6 +44,9 @@ def main() -> None:
         app = build_admin(
             AdminSettings(AdminConfig(config.sql), config.sql.test_database, "contract-check-" * 3)
         )
+        assert app.openapi() == json.loads(
+            (ROOT / "contracts/console-openapi.json").read_text("utf-8")
+        ), "Console API drift"
         routes = {
             (method.upper(), path)
             for path, operations in app.openapi()["paths"].items()
