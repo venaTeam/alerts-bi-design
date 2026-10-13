@@ -296,16 +296,18 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     assert portal_week().status_code == 404
 
 
-def test_the_full_scorecard_renders_from_sql_with_its_own_policy(client: TestClient) -> None:
-    response = _get(client, f"/runs/{RUN1}/scorecard", headers=ALICE)
-    assert response.status_code == 200
-    assert "<html" in response.text.lower()
-    assert "style-src 'unsafe-inline'" in response.headers["content-security-policy"]
-    assert "script-src" not in response.headers["content-security-policy"]
+def test_standalone_html_outputs_are_removed(client: TestClient) -> None:
+    assert _get(client, f"/runs/{RUN1}", headers=ALICE).status_code == 404
+    for suffix in ("scorecard", "scorecard.html"):
+        assert _get(client, f"/runs/{RUN1}/{suffix}", headers=ALICE).status_code == 422
+    for name in ("daily_metrics.csv", "rule_counts.csv", "alert_worklist.csv"):
+        response = _get(client, f"/runs/{RUN1}/{name}", headers=ALICE)
+        assert response.status_code == 200
+        assert "attachment" in response.headers["content-disposition"]
 
 
 def test_an_unknown_run_is_not_found(client: TestClient) -> None:
-    assert _get(client, "/runs/nope/scorecard", headers=ALICE).status_code == 404
+    assert _get(client, "/runs/nope/daily_metrics.csv", headers=ALICE).status_code == 404
 
 
 # ------------------------------------------------------------------ the Summary page
