@@ -49,3 +49,10 @@ No merge or OpenShift deployment is performed. Apply migration 010 before updati
 starting one dedicated run-worker with matching settings. Use the explicit output-root
 remove-run-html command for older generated HTML, preserving all CSV exports and unrelated files.
 Rollback UI/worker together, resolve pending submissions first, and preserve the additive SQL table.
+
+Coordinated review links: [admin #5](https://github.com/venaTeam/alerts-bi-admin/pull/5) and
+[design #5](https://github.com/venaTeam/alerts-bi-design/pull/5). Both use codex/async-runs.
+After implementation and verification, 31 legacy scorecard.html files were removed from
+four explicitly checked local run-output roots. All 126 CSV files in those roots retained
+their original byte hashes. Recovery archives, other HTML and original checkouts were preserved.
+The task-local evidence/html-cleanup.json records counts and roots. No production cleanup occurred.
