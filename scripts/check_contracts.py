@@ -28,6 +28,7 @@ def main() -> None:
         RULE_COUNT_HEADERS,
         WORKLIST_HEADERS,
     )
+    from alerts_bi_operations.report.render import OUTPUT_FILES
 
     config = load_config()
     assert SCHEMA_PATH.read_bytes() == (ROOT / "contracts/teams.schema.json").read_bytes(), (
@@ -55,6 +56,8 @@ def main() -> None:
         assert ("GET", "/csrf") in routes
         assert heads() == [contract["schema_head"]]
     outputs = json.loads((ROOT / "contracts/outputs.json").read_text("utf-8"))
+    assert outputs["files"] == list(OUTPUT_FILES), "Output filenames changed"
+    assert outputs["on_demand"] == [], "Standalone outputs must remain removed"
     assert outputs["headers"] == {
         "DAILY_METRIC_HEADERS": list(DAILY_METRIC_HEADERS),
         "RULE_COUNT_HEADERS": list(RULE_COUNT_HEADERS),
