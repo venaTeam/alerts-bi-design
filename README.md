@@ -5,6 +5,10 @@ standalone [portal](https://github.com/venaTeam/alerts-bi-portal). Admin owns ex
 migrations, scheduling, registry, mock tooling and shared/operations library production.
 The former runs repository is historical; see `docs/runs-retirement.md`.
 
+The supported local workspace has three checkouts: admin, portal and design. A local runs
+checkout is unnecessary and may be removed after preserving local work and any dependent
+worktrees. GitHub archival and service cutover remain separate actions.
+
 Use `docs/source-map.md` to navigate. `docs/alerts_bi_design.md` defines behavior,
 `docs/alerts_bi_flow.md` and `docs/alerts_bi_implementation_plan.md` explain execution,
 and `docs/outputs.md` defines outputs. Decisions and contracts live in their named folders;

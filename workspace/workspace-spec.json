@@ -1,7 +1,7 @@
 {
   "kind": "workspace",
   "name": "Alerts BI workspace",
-  "summary": "Local non-Git navigation for admin, portal, design and the historical runs checkout.",
+  "summary": "Local non-Git navigation for the three maintained repositories: admin, portal and design.",
   "sources": [
     {
       "role": "design",
@@ -14,11 +14,6 @@
     {
       "path": "alerts-bi-design",
       "role": "Canonical product design, contracts, accepted decisions, and coordinated release evidence.",
-      "owner": "venaTeam; individual owner not assigned"
-    },
-    {
-      "path": "alerts-bi-runs",
-      "role": "Historical source checkout; no maintained runtime after retirement cutover.",
       "owner": "venaTeam; individual owner not assigned"
     },
     {
@@ -60,9 +55,19 @@
     "Read applicable AGENTS.md and source indexes first; consult relevant canonical requirements before changes. Work across repositories requires explicit ownership/contracts.",
     "KeepHQ and the original alerts BI checkout are outside this workspace. Preserve them.",
     "Each application builds from its own clone and committed lockfile. Never require a parent venv or PYTHONPATH sibling import.",
-    "At most three useful subagents; no recursive delegation; lead owns integration. Do not automatically execute repository scripts at session start."
+    "At most three useful subagents; no recursive delegation; lead owns integration. Do not automatically execute repository scripts at session start.",
+    "Do not require or recreate a runs checkout. Private recovery archives are not active projects or build/runtime inputs; local removal does not authorize deployment or GitHub archival."
   ],
   "open_questions": [
     "Individual service owners and production artifact hosting beyond vendored wheels remain unassigned. No cluster deployment has been performed."
+  ],
+  "retired_repositories": [
+    {
+      "name": "alerts-bi-runs",
+      "replacement": "alerts-bi-admin",
+      "remote": "https://github.com/venaTeam/alerts-bi-runs.git",
+      "local_checkout_required": false,
+      "documentation": "alerts-bi-design/docs/runs-retirement.md"
+    }
   ]
 }
