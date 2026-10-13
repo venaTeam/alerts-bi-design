@@ -1,0 +1,899 @@
+{
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]",
+    "teams": 3,
+    "weeks": 27,
+    "heavy_teams": 3,
+    "heavy_identities": 500,
+    "heavy_events": 10000,
+    "concurrency": 2,
+    "seed_seconds": 25.387,
+    "cold_definition": "empty decoded-summary cache; SQL buffer cache is not flushed",
+    "timing": "real ASGI entry points through TestClient, including render and local adapter overhead"
+  },
+  "cold": [
+    {
+      "route": "admin_directory",
+      "ms": 166.60669998964295,
+      "bytes": 4802,
+      "sql_rows": 9,
+      "sql_queries": 4,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "admin_overview",
+      "ms": 342.6243999856524,
+      "bytes": 106760,
+      "sql_rows": 185,
+      "sql_queries": 19,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "admin_findings",
+      "ms": 235.162400000263,
+      "bytes": 102865,
+      "sql_rows": 1153,
+      "sql_queries": 7,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "portal_directory",
+      "ms": 108.49060001783073,
+      "bytes": 2723,
+      "sql_rows": 6,
+      "sql_queries": 1,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "portal_overview",
+      "ms": 395.5859999987297,
+      "bytes": 11175,
+      "sql_rows": 150,
+      "sql_queries": 12,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "portal_filter",
+      "ms": 526.2453000177629,
+      "bytes": 23238,
+      "sql_rows": 220,
+      "sql_queries": 19,
+      "status": 200,
+      "overlapped_write": false
+    },
+    {
+      "route": "portal_deep_page",
+      "ms": 228.61410002224147,
+      "bytes": 21584,
+      "sql_rows": 202,
+      "sql_queries": 17,
+      "status": 200,
+      "overlapped_write": false
+    }
+  ],
+  "ingestion_seconds": 1.196578400034923,
+  "during_ingestion_definition": "Only requests begun while the writer transaction was active; blocked requests may finish after commit",
+  "warm": {
+    "admin_directory": {
+      "requests": 12,
+      "p50_ms": 15.13,
+      "p95_ms": 18.13,
+      "max_sql_rows": 9,
+      "max_ms": 18.13,
+      "failures": 0,
+      "max_sql_queries": 4,
+      "max_response_bytes": 4802
+    },
+    "admin_overview": {
+      "requests": 12,
+      "p50_ms": 105.78,
+      "p95_ms": 131.96,
+      "max_sql_rows": 185,
+      "max_ms": 131.96,
+      "failures": 0,
+      "max_sql_queries": 19,
+      "max_response_bytes": 106760
+    },
+    "admin_findings": {
+      "requests": 12,
+      "p50_ms": 97.61,
+      "p95_ms": 106.88,
+      "max_sql_rows": 1153,
+      "max_ms": 106.88,
+      "failures": 0,
+      "max_sql_queries": 7,
+      "max_response_bytes": 102865
+    },
+    "portal_directory": {
+      "requests": 12,
+      "p50_ms": 14.13,
+      "p95_ms": 18.03,
+      "max_sql_rows": 6,
+      "max_ms": 18.03,
+      "failures": 0,
+      "max_sql_queries": 1,
+      "max_response_bytes": 2723
+    },
+    "portal_overview": {
+      "requests": 12,
+      "p50_ms": 114.27,
+      "p95_ms": 131.02,
+      "max_sql_rows": 150,
+      "max_ms": 131.02,
+      "failures": 0,
+      "max_sql_queries": 12,
+      "max_response_bytes": 11175
+    },
+    "portal_filter": {
+      "requests": 12,
+      "p50_ms": 135.85,
+      "p95_ms": 149.36,
+      "max_sql_rows": 220,
+      "max_ms": 149.36,
+      "failures": 0,
+      "max_sql_queries": 19,
+      "max_response_bytes": 23238
+    },
+    "portal_deep_page": {
+      "requests": 12,
+      "p50_ms": 122.73,
+      "p95_ms": 168.7,
+      "max_sql_rows": 202,
+      "max_ms": 168.7,
+      "failures": 0,
+      "max_sql_queries": 17,
+      "max_response_bytes": 21584
+    }
+  },
+  "during_ingestion": {
+    "admin_directory": {
+      "requests": 4,
+      "p50_ms": 20.07,
+      "p95_ms": 23.19,
+      "max_sql_rows": 9,
+      "max_ms": 23.19,
+      "failures": 0,
+      "max_sql_queries": 4,
+      "max_response_bytes": 4802
+    },
+    "admin_overview": {
+      "requests": 4,
+      "p50_ms": 149.51,
+      "p95_ms": 160.78,
+      "max_sql_rows": 185,
+      "max_ms": 160.78,
+      "failures": 0,
+      "max_sql_queries": 19,
+      "max_response_bytes": 106760
+    },
+    "admin_findings": {
+      "requests": 3,
+      "p50_ms": 115.67,
+      "p95_ms": 128.12,
+      "max_sql_rows": 1153,
+      "max_ms": 128.12,
+      "failures": 0,
+      "max_sql_queries": 7,
+      "max_response_bytes": 102865
+    },
+    "portal_directory": {
+      "requests": 3,
+      "p50_ms": 24.64,
+      "p95_ms": 36.5,
+      "max_sql_rows": 6,
+      "max_ms": 36.5,
+      "failures": 0,
+      "max_sql_queries": 1,
+      "max_response_bytes": 2723
+    },
+    "portal_overview": {
+      "requests": 3,
+      "p50_ms": 147.82,
+      "p95_ms": 150.75,
+      "max_sql_rows": 150,
+      "max_ms": 150.75,
+      "failures": 0,
+      "max_sql_queries": 12,
+      "max_response_bytes": 11175
+    },
+    "portal_filter": {
+      "requests": 3,
+      "p50_ms": 208.32,
+      "p95_ms": 210.28,
+      "max_sql_rows": 220,
+      "max_ms": 210.28,
+      "failures": 0,
+      "max_sql_queries": 19,
+      "max_response_bytes": 23238
+    },
+    "portal_deep_page": {
+      "requests": 3,
+      "p50_ms": 172.59,
+      "p95_ms": 176.83,
+      "max_sql_rows": 202,
+      "max_ms": 176.83,
+      "failures": 0,
+      "max_sql_queries": 17,
+      "max_response_bytes": 21584
+    }
+  },
+  "acknowledgement": {
+    "new_submissions": 20,
+    "p95_ms": 203.31
+  },
+  "sql_version": {
+    "version": "16.0.4135.4"
+  },
+  "read_committed_snapshot": {
+    "enabled": true
+  },
+  "storage": [
+    {
+      "table_name": "alembic_version",
+      "rows": 1,
+      "reserved_kib": 72
+    },
+    {
+      "table_name": "alert_findings",
+      "rows": 41000,
+      "reserved_kib": 67280
+    },
+    {
+      "table_name": "backup_metadata_store",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "daily_metrics",
+      "rows": 164,
+      "reserved_kib": 200
+    },
+    {
+      "table_name": "daily_rule_counts",
+      "rows": 656,
+      "reserved_kib": 264
+    },
+    {
+      "table_name": "db_ledger_blocks",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "db_ledger_digest_locations",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "db_ledger_transactions",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "filestream_tombstone_2073058421",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "filetable_updates_2105058535",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "finding_decisions",
+      "rows": 13527,
+      "reserved_kib": 9888
+    },
+    {
+      "table_name": "ledger_columns_history_internal",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "ledger_columns_history_internal_history",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "ledger_tables_history_internal",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "ledger_tables_history_internal_history",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_batch_attempts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_prompt_artifacts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_review_attempts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_review_batches",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_review_scopes",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "llm_verdicts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "panel_parses",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_context_settings",
+      "rows": 3,
+      "reserved_kib": 72
+    },
+    {
+      "table_name": "plan_persist_plan",
+      "rows": 34,
+      "reserved_kib": 408
+    },
+    {
+      "table_name": "plan_persist_plan_feedback",
+      "rows": 5,
+      "reserved_kib": 144
+    },
+    {
+      "table_name": "plan_persist_plan_forcing_locations",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_query",
+      "rows": 34,
+      "reserved_kib": 144
+    },
+    {
+      "table_name": "plan_persist_query_hints",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_query_template_parameterization",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_query_text",
+      "rows": 34,
+      "reserved_kib": 208
+    },
+    {
+      "table_name": "plan_persist_query_variant",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_replicas",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_runtime_stats",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_runtime_stats_interval",
+      "rows": 1,
+      "reserved_kib": 144
+    },
+    {
+      "table_name": "plan_persist_runtime_stats_v2",
+      "rows": 6,
+      "reserved_kib": 216
+    },
+    {
+      "table_name": "plan_persist_wait_stats",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "plan_persist_wait_stats_v2",
+      "rows": 20,
+      "reserved_kib": 216
+    },
+    {
+      "table_name": "queue_messages_1977058079",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "queue_messages_2009058193",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "queue_messages_2041058307",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "review_publications",
+      "rows": 81,
+      "reserved_kib": 288
+    },
+    {
+      "table_name": "run_alert_list",
+      "rows": 41000,
+      "reserved_kib": 69288
+    },
+    {
+      "table_name": "run_analysis_checkpoints",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "run_application_daily",
+      "rows": 820,
+      "reserved_kib": 392
+    },
+    {
+      "table_name": "run_jobs",
+      "rows": 20,
+      "reserved_kib": 288
+    },
+    {
+      "table_name": "run_panels",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "run_rule_membership",
+      "rows": 39524,
+      "reserved_kib": 18000
+    },
+    {
+      "table_name": "run_summaries",
+      "rows": 902,
+      "reserved_kib": 3464
+    },
+    {
+      "table_name": "run_v1_rules",
+      "rows": 20500,
+      "reserved_kib": 5640
+    },
+    {
+      "table_name": "runs",
+      "rows": 82,
+      "reserved_kib": 208
+    },
+    {
+      "table_name": "schema_migrations",
+      "rows": 13,
+      "reserved_kib": 72
+    },
+    {
+      "table_name": "sqlagent_job_history",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sqlagent_jobs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sqlagent_jobsteps",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sqlagent_jobsteps_logs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysallocunits",
+      "rows": 287,
+      "reserved_kib": 56
+    },
+    {
+      "table_name": "sysasymkeys",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysaudacts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysbinobjs",
+      "rows": 23,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysbinsubobjs",
+      "rows": 3,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysbrickfiles",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syscerts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syschildinsts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysclones",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysclsobjs",
+      "rows": 26,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "syscolpars",
+      "rows": 1614,
+      "reserved_kib": 464
+    },
+    {
+      "table_name": "syscommittab",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syscompfragments",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysconvgroup",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syscscolsegments",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syscsdictionaries",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syscsrowgroups",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysdbfiles",
+      "rows": 2,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "sysdbfrag",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysdbreg",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysdercv",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysdesend",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysendpts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysextfileformats",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysextsources",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysexttables",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysfgfrag",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysfiles1",
+      "rows": 2,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "sysfoqueues",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysfos",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysftinds",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysftproperties",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysftsemanticsdb",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysftstops",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysguidrefs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysidxstats",
+      "rows": 286,
+      "reserved_kib": 192
+    },
+    {
+      "table_name": "sysiscols",
+      "rows": 571,
+      "reserved_kib": 192
+    },
+    {
+      "table_name": "syslnklgns",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysmultiobjrefs",
+      "rows": 300,
+      "reserved_kib": 96
+    },
+    {
+      "table_name": "sysmultiobjvalues",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysnsobjs",
+      "rows": 1,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysobjkeycrypts",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysobjvalues",
+      "rows": 394,
+      "reserved_kib": 1040
+    },
+    {
+      "table_name": "sysowners",
+      "rows": 15,
+      "reserved_kib": 48
+    },
+    {
+      "table_name": "sysphfg",
+      "rows": 1,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "syspriorities",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysprivs",
+      "rows": 254,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "syspru",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysprufiles",
+      "rows": 2,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "sysqnames",
+      "rows": 98,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysremsvcbinds",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysrmtlgns",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysrowsetrefs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysrowsets",
+      "rows": 229,
+      "reserved_kib": 40
+    },
+    {
+      "table_name": "sysrscols",
+      "rows": 1819,
+      "reserved_kib": 264
+    },
+    {
+      "table_name": "sysrts",
+      "rows": 1,
+      "reserved_kib": 48
+    },
+    {
+      "table_name": "sysscalartypes",
+      "rows": 34,
+      "reserved_kib": 48
+    },
+    {
+      "table_name": "sysschobjs",
+      "rows": 2903,
+      "reserved_kib": 1104
+    },
+    {
+      "table_name": "sysseobjvalues",
+      "rows": 3,
+      "reserved_kib": 72
+    },
+    {
+      "table_name": "syssingleobjrefs",
+      "rows": 282,
+      "reserved_kib": 96
+    },
+    {
+      "table_name": "syssoftobjrefs",
+      "rows": 25,
+      "reserved_kib": 144
+    },
+    {
+      "table_name": "syssqlguides",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "systypedsubobjs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysusermsgs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "syswebmethods",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysxlgns",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysxmitbody",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysxmitqueue",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysxmlcomponent",
+      "rows": 100,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysxmlfacet",
+      "rows": 112,
+      "reserved_kib": 16
+    },
+    {
+      "table_name": "sysxmlplacement",
+      "rows": 19,
+      "reserved_kib": 32
+    },
+    {
+      "table_name": "sysxprops",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "sysxsrvs",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "weekly_review_log",
+      "rows": 0,
+      "reserved_kib": 0
+    },
+    {
+      "table_name": "wpr_bucket_table",
+      "rows": 0,
+      "reserved_kib": 0
+    }
+  ],
+  "database_files": [
+    {
+      "type_desc": "ROWS",
+      "kib": 204800
+    },
+    {
+      "type_desc": "LOG",
+      "kib": 204800
+    }
+  ],
+  "peak_process_mib": 127.6
+}
