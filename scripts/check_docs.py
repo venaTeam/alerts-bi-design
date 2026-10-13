@@ -23,8 +23,8 @@ def main() -> None:
     ):
         assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))
-    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 8
-    assert "008_measurement_basis" == migrations["schema_head"]
+    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 9
+    assert "009_run_deletion" == migrations["schema_head"]
     print("Canonical contract JSON and instruction entry points are valid")
 
 
