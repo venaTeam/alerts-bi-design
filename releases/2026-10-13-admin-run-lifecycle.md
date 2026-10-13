@@ -152,3 +152,7 @@ Executed verification:
   `out/report-race-deleted.png`.
 
 Both PRs remain unmerged; deployment was not performed.
+
+Both Linux/Python 3.12 GitHub unit checks passed on admin `cae0fa8`:
+[run 38404651157](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38404651157)
+and [run 38404658636](https://github.com/venaTeam/alerts-bi-admin/actions/runs/38404658636).
