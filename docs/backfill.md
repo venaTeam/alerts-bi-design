@@ -18,8 +18,9 @@ queue work while a backfill is in progress. The weekly scheduler still never bac
 2. **One run at a time, oldest first.** A New run or the weekly schedule can go ahead of the next
    queued week.
 3. **Only published weeks are locked.** A week with a current publication cannot be picked;
-   withdraw it to run it again. A week with an unpublished run can be picked, and its run is
-   replaced by the normal deterministic-identity persistence rules.
+   withdraw it to run it again. A week with an unpublished run can be picked and is run again;
+   as for any manual rerun, persistence replaces the earlier run only when its deterministic
+   identity (registry and model versions) is unchanged, otherwise both runs remain.
 4. **Cancel removes only queued weeks.** The running week finishes, completed weeks stay, and a
    failed week can be retried on its own.
 5. **One team per backfill**, started from that team's workspace.
