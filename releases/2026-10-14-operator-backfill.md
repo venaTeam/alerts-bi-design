@@ -51,3 +51,18 @@ Coordinated review: [admin #10](https://github.com/venaTeam/alerts-bi-admin/pull
 [design #7](https://github.com/venaTeam/alerts-bi-design/pull/7), both on codex/backfill.
 Merge together; deploy only with separate authorization. Deployment initialization applies 014
 before the UI and worker start. Before an application rollback, cancel or finish active backfills.
+
+## Review fixes
+
+The review of admin #10 at 49e9fad reported two issues, both reproduced by new tests that
+failed on that revision. Admin 3f15e4c claims queued manual runs by submission time instead of
+reporting week, and makes every run job insert and run deletion take the team's
+transaction-scoped queue lock `alerts-bi-queue:{team_id}`, so a deletion paused after its
+checks can no longer remove a week accepted before its cleanup (backfill and queued manual
+admission). Design a1f5a71 records the lock; admin e473a81 pins that snapshot.
+
+Re-run on the final admin tree: ruff check, ruff format --check and strict mypy passed;
+927 unit tests passed; `tests/integration tests/engine/integration tests/engine/acceptance`:
+188 passed with no skips; `check_contracts.py --console --sql` passed. Browser recheck on a
+seeded alerts_bi_test: a 9-week backfill was accepted and a run deletion succeeded while all
+nine queued weeks remained.
