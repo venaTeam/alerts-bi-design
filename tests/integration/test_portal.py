@@ -682,7 +682,7 @@ def test_application_summary_and_history_match_selected_identities(reader: SqlCo
     assert all(r.totals["v1"].events == 20 and r.totals["v2"].events == 3 for r in reviews)
     assert "notif-dispatcher" in reviews[-1].applications.options
     assert "unpublished-only" not in reviews[-1].applications.options
-    assert all(len(week.v1_rules) == 1 for week in inputs.history)
+    assert inputs.facts is not None and inputs.facts["rules_left"] == 1
     assert summarize(inputs).estimate.rules_left == 1
 
 
@@ -949,7 +949,10 @@ def test_old_work_list_links_open_the_fix_list(portal: TestClient) -> None:
 def test_paging_keeps_the_filters(portal: TestClient) -> None:
     listing = _alerts(_tab(portal, "fix", show="all", state="assessed_good"))
     assert "1&ndash;3 of 4" in listing
-    assert "show=all&amp;state=assessed_good&amp;page=2#alerts" in listing
+    next_href = next(html.unescape(link) for link in re.findall(r'href="([^"]+)"', listing) if "page=2" in link)
+    params = parse_qs(urlsplit(next_href).query)
+    assert params["show"] == ["all"] and params["state"] == ["assessed_good"]
+    assert "cursor" in params
     second = _alerts(_tab(portal, "fix", show="all", state="assessed_good", page=2))
     assert "4&ndash;4 of 4" in second
 
