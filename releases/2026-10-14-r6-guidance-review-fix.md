@@ -37,4 +37,5 @@ Executed checks:
 One existing upstream Starlette/httpx deprecation warning remains. Only local
 `alerts_bi_test` was reset for browser/integration checks. Task web servers and browser
 tabs were stopped afterward. No large load, production changes, merge or deployment was
-performed. The linked existing review branches are admin PR #6, portal PR #4 and design PR #6.
+performed. The original admin performance PR #6 was already merged before this correction;
+admin PR #7 contains the shared-library follow-up. Portal PR #4 and design PR #6 remain open.
