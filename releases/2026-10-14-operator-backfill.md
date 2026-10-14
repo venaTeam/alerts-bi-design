@@ -50,7 +50,8 @@ deployment. No merge or deployment was performed.
 Coordinated review: [admin #10](https://github.com/venaTeam/alerts-bi-admin/pull/10) and
 [design #7](https://github.com/venaTeam/alerts-bi-design/pull/7), both on codex/backfill.
 Merge together; deploy only with separate authorization. Deployment initialization applies 014
-before the UI and worker start. Before an application rollback, cancel or finish active backfills.
+before the UI and worker start. Before an application rollback, stop new submissions and drain
+or terminalize every queued job, including New runs queued behind a backfill (worker runbook).
 
 ## Review fixes
 
@@ -75,3 +76,14 @@ A dismiss-then-retry regression test failed on e473a81 and passes. Final re-run:
 and strict mypy passed; 927 unit; 189 integration and acceptance with no skips;
 `check_contracts.py --console --sql` passed; a two-tab browser recheck on alerts_bi_test showed
 the retried backfill with its Cancel/Remove controls.
+
+A third review found two more issues. Admin: backfill job submission keys were numbered from the
+surviving job rows, so after run deletion removed an earlier attempt a later retry reused an
+existing key and failed on `uq_run_jobs_submission_hash`. Admin 0ec621a derives keys from each
+job's own ID; a regression test reproducing the delete-between-retries sequence failed on
+9040883 and passes. Design a7a6855 (admin snapshot 85564db): the rollback guidance now requires
+stopping new submissions and draining or terminalizing every queued job, including New runs
+queued behind a backfill, in the contract, runbook, decision 005 and this record. Final re-run:
+lint, format and strict mypy passed; 927 unit; 190 integration and acceptance with no skips;
+`check_contracts.py --console --sql` passed; browser retry recheck on alerts_bi_test.
+
