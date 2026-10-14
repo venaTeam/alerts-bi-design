@@ -66,3 +66,12 @@ Re-run on the final admin tree: ruff check, ruff format --check and strict mypy 
 188 passed with no skips; `check_contracts.py --console --sql` passed. Browser recheck on a
 seeded alerts_bi_test: a 9-week backfill was accepted and a run deletion succeeded while all
 nine queued weeks remained.
+
+A second review at admin e473a81 found that a dismissed backfill retried from a stale form, or
+an older backfill retried after a newer one finished, ran without a visible panel. Admin
+e94b67a (snapshot 9040883) shows an active backfill ahead of finished ones and clears the
+dismissal on retry; dismissal takes the team queue lock. Design c6f35e5 records the display rule.
+A dismiss-then-retry regression test failed on e473a81 and passes. Final re-run: lint, format
+and strict mypy passed; 927 unit; 189 integration and acceptance with no skips;
+`check_contracts.py --console --sql` passed; a two-tab browser recheck on alerts_bi_test showed
+the retried backfill with its Cancel/Remove controls.
