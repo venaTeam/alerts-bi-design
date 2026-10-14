@@ -1,0 +1,53 @@
+# Operator backfill — 2026-10-14
+
+Implementation: admin commits 66469d6 (migration 014), 137c05c (backfill feature) and 49e9fad
+(documentation and snapshot) on codex/backfill, based on main c85d231. Canonical input: design
+05962a3 (amendment) and 9ff276e (contracts) on codex/backfill, based on main a22ca48. The
+admin snapshot is pinned to 9ff276e. Migration 014_backfills is additive; applied revisions
+001–013 keep their exact bytes. Portal views and shared/operations interfaces are unchanged.
+
+## Executed checks
+
+- `poetry run pytest tests/unit tests/engine/unit -q`: 927 passed.
+- `poetry run pytest tests/integration tests/engine/integration -q`: 181 passed on real local SQL
+  Server and the seeded Elasticsearch mock; no skipped checks. Includes 10 new backfill tests.
+- `poetry run pytest tests/engine/acceptance -q`: 4 passed.
+- `poetry run ruff check .`, `poetry run ruff format --check .`, `poetry run mypy`,
+  `poetry check --lock`: passed. `poetry build` wheel contains engine/api/backfill.py and both
+  014 migration files.
+- `uv run python scripts/check_docs.py`: passed.
+- Admin-environment `python ../design/scripts/check_contracts.py --console --sql`: passed,
+  including the regenerated console OpenAPI, routes, schema head, migration hashes and
+  unchanged published-view metadata.
+
+One upstream Starlette/httpx deprecation warning is present. Tests and browser checks used only
+the disposable alerts_bi_test database and existing local mocks; task-local servers were stopped.
+
+## Browser evidence
+
+The loopback admin server (port 8211, explicit dev identity) and the installed run-worker ran on
+a seeded alerts_bi_test with two published weeks and one unpublished run. The dialog showed
+Sunday-first calendars, locked published weeks, the expiring-week warning, select-all, the run
+order and the model select. A 7-week fake-model backfill was executed by the real worker oldest
+first; the panel polled and reloaded to Finished, runs showed source Backfill, and the gap banner
+recounted. A second backfill exercised Remove, an injected registry change (failed week),
+Retry (attempt 2), Cancel and Dismiss. A 375px viewport showed no horizontal overflow; console
+errors were limited to refused polls during deliberate server restarts.
+
+The check found and fixed three defects before delivery: the shared portal `.missing` rule
+recoloured calendar days (state classes are now `is-*`), redirects anchored below the
+confirmation message, and the dialog claimed an unpublished run is always replaced (it is
+replaced only when its deterministic identity is unchanged; backfill.md was clarified).
+
+## Not verified
+
+The live model path with a real model (local mock runs with LLM_ENABLED=false), the weekly wait
+inside a real CronJob (covered by SQL integration tests with an injected clock), and any cluster
+deployment. No merge or deployment was performed.
+
+## Delivery
+
+Coordinated review: [admin #10](https://github.com/venaTeam/alerts-bi-admin/pull/10) and
+[design #7](https://github.com/venaTeam/alerts-bi-design/pull/7), both on codex/backfill.
+Merge together; deploy only with separate authorization. Deployment initialization applies 014
+before the UI and worker start. Before an application rollback, cancel or finish active backfills.
