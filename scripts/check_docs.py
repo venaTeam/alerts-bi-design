@@ -20,6 +20,7 @@ def main() -> None:
         "docs/alerts_bi_implementation_plan.md",
         "docs/outputs.md",
         "docs/async-runs.md",
+        "docs/backfill.md",
         "decisions/001-repository-separation.md",
     ):
         assert (ROOT / relative).is_file(), relative
