@@ -20,12 +20,13 @@ def main() -> None:
         "docs/alerts_bi_implementation_plan.md",
         "docs/outputs.md",
         "docs/async-runs.md",
+        "docs/backfill.md",
         "decisions/001-repository-separation.md",
     ):
         assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))
-    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 13
-    assert "013_analysis_checkpoints" == migrations["schema_head"]
+    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 14
+    assert "014_backfills" == migrations["schema_head"]
     console = json.loads((ROOT / "contracts/console-http.json").read_text("utf-8"))
     assert console["schema_head"] == migrations["schema_head"]
     print("Canonical contract JSON and instruction entry points are valid")
