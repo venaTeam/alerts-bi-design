@@ -3,7 +3,9 @@
 `SQL_ENCRYPT` and `SQL_TRUST_SERVER_CERTIFICATE` were read but never applied by the shared
 SQL adapter. This change applies them. It is one of three gaps from a security review. The
 other two are not addressed here: the portal allowlist behind the OpenShift router was
-skipped by owner decision, and the portal still shares admin's read/write SQL login.
+skipped by owner decision. The portal still shares admin's read/write SQL login; that risk
+and its reader-login option are recorded in the design note of the same date, and nothing
+in this change alters the credentials.
 
 Driver findings, against local SQL Server 2022, using `sys.dm_exec_connections.encrypt_option`:
 
@@ -17,7 +19,8 @@ Driver findings, against local SQL Server 2022, using `sys.dm_exec_connections.e
 
 Admin `2b875c8` (shared 0.1.6, operations 0.2.3, pymssql 2.4.4 lock) and `f2d68d6` (snapshot),
 portal `0e81673` (vendored shared 0.1.6, pymssql 2.4.4 lock) and `479316e` (snapshot), design
-`4d228bf` (amendment). Both consumers pin canonical design `4d228bf`.
+`4d228bf` (amendment) and `ad75759` (portal SQL login note). Both consumers then pin
+canonical design `ad75759` (admin `be7dc79`, portal `0781f4d`).
 
 Shared 0.1.6 is a new immutable artifact; SHA-256:
 `7ff20c81cfc1cb2a7c38d462ac0c1892bd9e8308426465c776971b0257cc29c2` (a rebuild from the
@@ -40,6 +43,12 @@ Executed checks:
   `SQL_TRUST_SERVER_CERTIFICATE=false` exited 1 at startup. With `SQL_ENCRYPT=true` against
   `alerts_bi_test` (schema 014), the browser rendered the team list, a team overview and its
   Fix list. SQL Server reported the portal session `encrypt_option` TRUE.
+
+Portal reader login (design note, no code change): on local `alerts_bi_test`, a login created
+by `alerts-bi-admin db grant-reader` (member of `alerts_bi_reader` only) ran the portal with
+`SQL_ENCRYPT=true`. It served all 31 links of a published team with HTTP 200 and no errors,
+read `portal_reviews`, and was denied SELECT on `runs` and DELETE/UPDATE on views and tables.
+The probe user and login were dropped afterwards. No request was sent to the database team.
 
 Not verified: behaviour against a SQL Server that refuses TLS (FreeTDS `require` semantics,
 not exercised); whether the production SQL Server accepts TLS; Docker image builds. The
