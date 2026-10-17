@@ -16,16 +16,20 @@ default `out/<run id prefix>`), `run --out`, `weekly --out` and acceptance `--ou
 run removes nothing from disk, so CSVs an operator exported (including `alert_worklist.csv`)
 stay until removed by hand.
 
-Implementation: admin refactor/stop-writing-csv-files (5dc70ac, 2aa0633, 2efa5fc, 278afb1,
-58453b9) from main 0ca2b9a. Canonical input: design 902c9a7 from main 1c27931; the admin
-snapshot is pinned to 902c9a7. No migration; applied revisions, SQL views, CSV columns, contract
-JSON and the shared/operations libraries are unchanged.
+Implementation: admin refactor/stop-writing-csv-files from main 0ca2b9a: 5dc70ac, 2aa0633,
+2efa5fc, 278afb1 and 58453b9, then review fixes 6ddef89, da35289 and the README API note.
+Canonical input: design 5e66877 from main 1c27931 (first pinned at 902c9a7). The admin snapshot
+is pinned to 5e66877, the last design commit that changes synced docs; later commits here touch
+only releases/. Re-pin admin to design main after this PR merges. No migration; applied
+revisions, SQL views, CSV columns, contract JSON and the shared/operations libraries are
+unchanged.
 
 ## Executed checks
 
 - `poetry run pytest tests/unit tests/engine/unit -q`: 925 passed (two cleanup tests removed).
 - `poetry run python scripts/ci_integration.py` (integration, engine integration, acceptance;
-  skips refused): 187 passed on local SQL Server and the seeded ES mock. The first run failed two
+  skips refused): 188 passed on local SQL Server and the seeded ES mock at da35289 (187 before
+  the review-fix backfill recovery test). The first run failed two
   new tests that changed the working directory and lost the relative registry; the tests were
   fixed (58453b9) and the full suite repeated.
 - `poetry run ruff check .`, `poetry run ruff format --check .`, `poetry run mypy`: passed.
