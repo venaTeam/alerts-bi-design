@@ -22,12 +22,36 @@ portal `0e81673` (vendored shared 0.1.6, pymssql 2.4.4 lock) and `479316e` (snap
 `4d228bf` (amendment) and `ad75759` (portal SQL login note). Both consumers then pin
 canonical design `ad75759` (admin `be7dc79`, portal `0781f4d`).
 
-Shared 0.1.6 is a new immutable artifact; SHA-256:
-`7ff20c81cfc1cb2a7c38d462ac0c1892bd9e8308426465c776971b0257cc29c2` (a rebuild from the
-committed source reproduced it). Operations 0.2.3 pins shared 0.1.6; SHA-256:
-`cbe3c9732caf97c76a0ed4a0e3443c90fe099387ffaa463bf2525f2a9cabffd3`. Prior artifacts unchanged.
+Review fixes (same day): admin `73b9135` (shared 0.1.7, operations 0.2.4, strict `SQL_ENCRYPT`,
+Alembic encryption test, encrypted CI smoke step) and `d46899f` (snapshot), portal `6ef7db3`
+(vendored shared 0.1.7) and `b22e754` (snapshot), design `0a58a7d` (refusal timing, interception
+limit, certificate-validation follow-up). Both consumers pin canonical design `0a58a7d`.
 
-Executed checks:
+Shared 0.1.6 (`7ff20c81cfc1cb2a7c38d462ac0c1892bd9e8308426465c776971b0257cc29c2`) and
+operations 0.2.3 (`cbe3c9732caf97c76a0ed4a0e3443c90fe099387ffaa463bf2525f2a9cabffd3`) were
+pushed and hash-verified in review, then superseded before merge. Shared 0.1.7 is the
+release; SHA-256 `853a985002c337df919b04ba29fbc2df606a882b22ae3ac17644b1e2adf59983`. A rebuild
+from the committed source reproduced it. Operations 0.2.4 pins shared 0.1.7; SHA-256
+`e3f4d849b84f4f9f8a7e7e2169a9966dbcf33c2ff1e5a409dc6b8d9657a92b2f`. Prior artifacts unchanged.
+
+Executed checks, review-fix tip:
+
+- Admin unit suite: **945 passed**. This includes strict `SQL_ENCRYPT` parsing and the Alembic
+  env encryption test, which was mutation-checked by removing the arguments. Ruff, format,
+  strict mypy and lock validation passed.
+- Admin `scripts/ci_integration.py` with `SQL_ENCRYPT=true`, zero skips: **192 passed**. The
+  new CI smoke-step command (encryption test plus Alembic migration suite, encrypted):
+  **17 passed**. GitHub CI runs the default-mode integration and the smoke step on push.
+- Portal unit suite: **283 passed** with shared 0.1.7, including `SQL_ENCRYPT=require`
+  refusal. Ruff, format, strict mypy and lock validation passed.
+- Coordinated installed-wheel checks: contracts matched; **77 passed** in each mode.
+- Docker images built from the branch tips run pymssql 2.4.4 (FreeTDS 1.5.19), shared 0.1.7
+  and operations 0.2.4. The admin image's encrypted `db setup` on `alerts_bi_test` exited 0
+  (up to date). The same image exited 1 for `SQL_TRUST_SERVER_CERTIFICATE=false` and for
+  `SQL_ENCRYPT=require`. The portal image served its home and team pages with HTTP 200 and no
+  errors; SQL Server reported its session `encrypt_option` TRUE.
+
+Executed checks, first submission:
 
 - Admin unit suite: **936 passed**; ruff, format, strict mypy and lock validation passed.
 - Admin `scripts/ci_integration.py` on local SQL Server and ES mock, zero skips: **192 passed**
@@ -51,8 +75,9 @@ read `portal_reviews`, and was denied SELECT on `runs` and DELETE/UPDATE on view
 The probe user and login were dropped afterwards. No request was sent to the database team.
 
 Not verified: behaviour against a SQL Server that refuses TLS (FreeTDS `require` semantics,
-not exercised); whether the production SQL Server accepts TLS; Docker image builds. The
-server certificate is not validated, so active interception remains a residual risk.
+not exercised); whether the production SQL Server accepts TLS; whether the live configuration
+sets `SQL_TRUST_SERVER_CERTIFICATE=false`. The server certificate is not validated, so active
+interception remains a residual risk, and certificate validation is an open follow-up.
 pymssql 2.4.4 was released 2026-10-10. Local `alerts_bi_dev` is at schema 008, so portal team
 pages return 503 there independently of this change. Only `alerts_bi_test` was reset. No
 production change, merge or deployment was performed.
