@@ -29,10 +29,28 @@ limit, certificate-validation follow-up). Both consumers pin canonical design `0
 
 Shared 0.1.6 (`7ff20c81cfc1cb2a7c38d462ac0c1892bd9e8308426465c776971b0257cc29c2`) and
 operations 0.2.3 (`cbe3c9732caf97c76a0ed4a0e3443c90fe099387ffaa463bf2525f2a9cabffd3`) were
-pushed and hash-verified in review, then superseded before merge. Shared 0.1.7 is the
-release; SHA-256 `853a985002c337df919b04ba29fbc2df606a882b22ae3ac17644b1e2adf59983`. A rebuild
-from the committed source reproduced it. Operations 0.2.4 pins shared 0.1.7; SHA-256
-`e3f4d849b84f4f9f8a7e7e2169a9966dbcf33c2ff1e5a409dc6b8d9657a92b2f`. Prior artifacts unchanged.
+pushed and hash-verified in review, then superseded before merge. The portal PR no longer
+carries the 0.1.6 wheel. Shared 0.1.7 is the release, vendored with SHA-256
+`853a985002c337df919b04ba29fbc2df606a882b22ae3ac17644b1e2adf59983`. Operations 0.2.4 pins
+shared 0.1.7; SHA-256 `e3f4d849b84f4f9f8a7e7e2169a9966dbcf33c2ff1e5a409dc6b8d9657a92b2f`.
+Prior artifacts are unchanged.
+
+Both hashes come from Windows builds, and a Windows rebuild from the committed source
+reproduces them. Linux builds hash differently. Admin CI and a clean `python:3.12-slim`
+build both produce shared `453ff2b715c78463dfa302433384317d5a98da30a9bbb101d37bf49dfd7fd1f4`
+and operations `63a61628c163e2baefb19784d7e5953409836bdda61c1608d6fdfcce8dd77031`. Compared
+entry by entry, the Linux and Windows archives differ only in the zip create-system field
+(3 versus 0) of every entry. File names, permissions and contents are identical. Admin CI
+now publishes its built wheels with a `SHA256SUMS` file for each commit.
+
+Second review round: design `d656e42` adds the encryption rollout order and rollback caveat
+to openshift-deployment.md. Admin `1660fa6` publishes CI-built wheels, and `6304017` pins the
+snapshot. Portal `05617b4` drops the superseded wheel, `4b8a15f` adds a minimal CI workflow,
+and `ff19064` pins the snapshot. Both consumers pin canonical design `d656e42`. Code is
+unchanged since the first review round. Admin unit (945) and portal unit (283) suites were
+rerun on the re-pinned snapshots. The portal workflow's steps passed in a clean
+`python:3.12-slim` container from `git archive HEAD` with no `.env`. Both workflow files
+parse with PyYAML.
 
 Executed checks, review-fix tip:
 
