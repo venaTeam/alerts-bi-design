@@ -1,0 +1,86 @@
+# Exact key_field identity in SQL — 2026-10-18
+
+The exact-application release (`2026-10-18-case-sensitive-applications.md`) left `key_field` on
+the database's case-insensitive default collation. Within one exact application, two keys
+that differ only in case, such as `disk:Node-1` and `disk:node-1`, were two identities in the
+engine and one value in SQL. The second spelling violated `pk_alert_findings` and
+`persist_run` rolled the whole run back. `llm_verdicts`' insert-if-absent also kept a verdict
+for only one spelling. This has not been observed in data.
+
+Accepted decision (product owner, 2026-10-18; design `e5c02d1`): key_fields that differ only in
+case are separate alert identities. Admin migration `016_case_sensitive_key_fields` stores
+`key_field` with `Latin1_General_100_BIN2` in `alert_findings`, `llm_verdicts`,
+`finding_decisions` and `run_alert_list`. It recreates `pk_alert_findings`, `pk_llm_verdicts`,
+`ix_finding_decisions_identity`, `ix_run_alert_list_order` and `ix_run_alert_list_events`
+verbatim and refreshes `portal_alerts`, `portal_alert_list` and `portal_decisions`. View column
+types, CSV outputs, console routes and the shared/operations libraries are unchanged. No library
+version and no portal code change. Decisions and stored verdicts attach to the exact key
+spelling, and work-list ties broken by `key_field` now sort uppercase before lowercase.
+
+The dependent objects come from the catalog of an `alerts_bi_test` migrated to 015: the five
+keys and indexes above, one auto-created statistic per table, and the three views. No foreign
+key, check constraint, computed column or schema-bound module references `key_field`.
+
+Revisions:
+- Admin: `3b2ea1f` (migration, readiness, tests), `97d2b01` (snapshot), `3bc70d2` and
+  `c6847fa` (merges of the 015 review rounds), `04205a7` (more 016 tests) and `12453a5` (LF line
+  endings, rollback isolation).
+- Design: `e5c02d1` (decision, contracts, deployment note) and `270de28` (merge of 015 round
+  three).
+- Portal: `5c0bda0` (snapshot) and `d73f1e0` (merge).
+
+Both consumers pin design `270de28`. All three branches are `fix/case-sensitive-key-fields`,
+stacked on the open 015 branches `fix/case-sensitive-applications` (admin `741f39f`, design
+`dde3ad6`, portal `2798285`). The merges keep the 015 changes as they are, apart from the
+snapshot pin and one adjustment to the 015 branch's tests that adding 016 required: both tests
+in `test_migration_015_upgrade.py` migrated to head, so they now stop at revision 015
+explicitly, and readiness after 015 names 016. The 016 deployment note follows the 015 rule that nothing
+may cut the rebuild short: a failed or killed 016 rolls back alone, and the next start repeats
+only its lock window.
+
+Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the seeded ES mock:
+
+- New admin integration test `test_key_field_case.py`: one application with `disk:Node-1` and
+  `disk:node-1` on the same day persists both to `alert_findings`, `run_alert_list` and
+  `llm_verdicts` with exact equality. A rerun reuses each spelling's own verdict with no model
+  call. After publishing, a decision on each spelling reads back only through its own identity
+  in `portal_alerts`, `portal_alert_list` and `portal_decisions`. Every `key_field` column
+  (4 tables, 3 views) reports BIN2. Each spelling's stored verdict carries its own marker
+  through the rerun. The keys and indexes on `key_field` are exactly the five rebuilt ones,
+  and a member of `alerts_bi_reader` reads `key_field` from the three refreshed views.
+- New `test_migration_016_upgrade.py`: a populated, published 015 database with a decision
+  upgrades to 016 with row counts unchanged. Readiness refuses before and passes after, the
+  decision reads back by exact key, and the case-only key variant's verdict now fits beside the
+  upgraded row. A schema-bound view on `key_field` makes 016 fail after its keys were
+  dropped. The whole migration then rolls back: head 015, no ledger row, and row counts, keys and
+  collation unchanged. Once the view is removed, a retry applies 016. New unit
+  `test_migration_016.py`: the revision follows 015 and refuses downgrade.
+- Mutation check: with the 016 files removed, six of the seven new integration tests fail. The
+  persistence tests fail with the original `pk_alert_findings` duplicate key for
+  `(case-app, disk:node-1)`. The reader-role test still passes, because it guards the grants the
+  view refresh keeps rather than the collision.
+- `db setup` upgraded an existing `alerts_bi_test` built by the acceptance verification at
+  015 (8 runs, 477 findings, 441 verdicts) to 016. Row counts and reader grants were unchanged,
+  all 7 `key_field` columns (4 tables, 3 views) report BIN2, and the five rebuilt keys and
+  indexes have the same key columns, order and clustering as before. This ran before the
+  rebase onto the 015 review follow-up, which changed only 015 tests and docs, so the 015 and
+  016 migration bytes were the same.
+- With the 016 files removed, `db setup` against the migrated database stops with `Can't
+  locate revision identified by '016_case_sensitive_key_fields'`. This is the roll-forward-only
+  behavior recorded in openshift-deployment.md.
+- Admin `scripts/ci_integration.py` on `12453a5`, zero skips: **203 passed** (196 on the 015
+  branch plus the seven new integration tests).
+- Unit **945 passed**. Ruff, format, strict mypy and lock validation passed.
+- Portal unit **283 passed**; ruff, format and strict mypy passed.
+- Admin-environment `check_contracts.py --console --sql` on design `270de28`: API, CSV, migration bytes, guides,
+  console routes and SQL view metadata match.
+- Coordinated `run_integration.py --registry config/teams.json` with the portal worktree
+  installed: **81 passed**, zero skips.
+- Browser, against `alerts_bi_test` with a published week holding `disk:Node-1` and
+  `disk:node-1` in `case-app`, each with its own confirmed decision: the portal's Fix list
+  showed two alerts, and each alert's detail showed only its own decision. The admin console's
+  Findings tab listed both, and selecting each showed its own key and decision.
+
+Not covered: SQL Server equality still ignores trailing spaces under BIN2. It has not been
+observed. Production table sizes were not available, so the one-time key rebuild's duration on
+production is unmeasured. Nothing has been merged or deployed.
