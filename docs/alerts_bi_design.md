@@ -19,8 +19,9 @@ scoring, prompt text, CSV outputs, portal views and the shared/operations librar
   published, withdrawn or no runs. Teams off the weekly schedule carry a Manual label. Teams
   whose newest run failed or completed unpublished come first; `?show=attention` lists only
   them.
-* **A team's week.** The team page shows one week at a time. A week picker lists the team's
-  runs, newest first, twenty per page. A three-step progress shows Run, Review and Publish, and
+* **A team's week.** The team page shows one week at a time. It opens on the newest run, or
+  on a pending, queued or running manual submission for a newer week. A week picker lists the
+  team's runs, newest first, twenty per page. A three-step progress shows Run, Review and Publish, and
   one panel below it shows the current step:
   * a pending, queued or running submission, polled as before;
   * a failed run: its error and New runs with that week checked;
@@ -43,7 +44,8 @@ scoring, prompt text, CSV outputs, portal views and the shared/operations librar
 * **New runs.** One dialog replaces New run and Backfill weeks. It lists the team's retained,
   completed weeks that can run: weeks without a completed run, and weeks with an unpublished run
   (which runs again). Weeks are newest first. The newest week is checked, or the selected week
-  when it failed, and a week that leaves retention within seven days is marked. Published,
+  when it failed, or the week a retention note warns about when the dialog opens from that note,
+  and a week that leaves retention within seven days is marked. Published,
   queued or running, expired and incomplete weeks are not listed, so the console runs a
   published week again only after it is withdrawn. Live, fake or off applies to every week,
   live by default. One selected week is submitted exactly as the former New run: a manual job
@@ -55,8 +57,9 @@ scoring, prompt text, CSV outputs, portal views and the shared/operations librar
   one.
 * **Several weeks running.** The former backfill panel appears above the week as "Running N
   weeks" with the same counts, progress, per-week actions, cancel, retry, dismiss and polling.
-  The retained-gap banner is replaced by a note shown only when a retained week without a run
-  leaves retention within seven days.
+  The retained-gap banner is replaced by a note shown only when a week without a run, later
+  than the team's first run, leaves retention within seven days; weeks before a team's first
+  run are not a gap.
 * **Schedule and Decisions.** Schedule shows the next week to be reviewed, each team's latest
   outcome and what happens next. Decisions adds team and decision filters. Neither page starts
   runs; runs start from a team's page.

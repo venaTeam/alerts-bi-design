@@ -16,8 +16,8 @@ rules below; selecting one week submits a manual run. The dialog lists only week
 picked, newest first, instead of month calendars, so decision 8 and the calendar description in
 "Selection and admission" no longer apply. Picking a published week, or a week already queued or
 running, is not offered rather than shown as locked. The progress panel is titled "Running N
-weeks", and the retained-gap banner is replaced by a note shown only when a retained week
-without a run leaves retention within seven days. Admission, the queue, execution, the routes
+weeks", and the retained-gap banner is replaced by a note shown only when a week without a run,
+later than the team's first run, leaves retention within seven days. Admission, the queue, execution, the routes
 and migration 014 are unchanged.
 
 ## Product decisions (user, 2026-10-14)
