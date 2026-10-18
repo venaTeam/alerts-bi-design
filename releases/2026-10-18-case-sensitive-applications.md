@@ -7,22 +7,23 @@ collation. The second spelling violated `pk_run_summaries` or `pk_run_applicatio
 and `pk_alert_findings` when the `key_field` matched. `persist_run` then rolled the whole run
 back, and every rerun failed the same way.
 
-Accepted decision (design `848731a`, amended `bc01ec8`): applications that differ only in case are separate
-applications. Admin migration `015_case_sensitive_applications` stores `application` with
+Accepted decision (design `848731a`, amended `bc01ec8` and `3e8d0f2`): applications that differ
+only in case are separate applications. Admin migration `015_case_sensitive_applications` stores `application` with
 `Latin1_General_100_BIN2` in `alert_findings`, `llm_verdicts`, `finding_decisions`,
 `run_alert_list`, `run_summaries`, `run_application_daily` and `run_v1_rules`. It recreates
 their keys and indexes verbatim and refreshes the portal views. View column types, CSV
 outputs, console routes and the shared/operations libraries are unchanged. No library
 version and no portal code change.
 
-Revisions: admin `e457943` (migration, readiness, regression test), `b6a3086` and `3e1f322`
-(review follow-up tests) and `9b0678f` (snapshot); design `848731a` (decision, contracts, deployment
-note) and `bc01ec8` (release safeguards, visible consequences, coordinated portal test);
-portal `adb96bb` (snapshot). Both consumers pin canonical design `bc01ec8`. The portal's
-previous pin was `d656e42`, so its refresh also carries the already-merged run-output-file
-amendment. Merge design first with a merge commit, not a squash, so the pinned `bc01ec8`
-stays reachable on design main; otherwise re-pin both consumers to the merged commit. Then
-merge admin, then portal.
+Revisions: admin `e457943` (migration, readiness, regression test), `b6a3086`, `3e1f322` and
+`3761be3` (review follow-up tests) and `741f39f` (snapshot); design `848731a` (decision,
+contracts, deployment note), `bc01ec8` (release safeguards, visible consequences, coordinated
+portal test), `1c38716` (portal test fixture fails on a broken migration) and `3e8d0f2` (no
+timeout may cut the rebuild short); portal `2798285` (snapshot). Both consumers pin canonical
+design `3e8d0f2`. The portal's original pin was `d656e42`, so its refresh also carries the
+already-merged run-output-file amendment. Merge design first with a merge commit, not a squash,
+so the pinned `3e8d0f2` stays reachable on design main; otherwise re-pin both consumers to the
+merged commit. Then merge admin, then portal.
 
 Visible consequences, recorded in the design: decisions and stored verdicts attach to the
 exact spelling, so a source that changes an application's casing between weeks loses the
@@ -67,7 +68,14 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
 - Migration timeouts: the Alembic engine in `env.py` passes no query timeout, so
   `SQL_REQUEST_TIMEOUT_MS` does not apply to migrations, and pymssql 2.4.4 defaults to none.
   The admin Deployment sets no `activeDeadlineSeconds` (only the weekly CronJob has one), so the
-  `migrate` init container is not cut short during a long rebuild.
+  `migrate` init container is not cut short during a long rebuild. Design `3e8d0f2` puts this in
+  openshift-deployment.md, with when to run deploy/migrate.yaml by hand instead.
+- Third review round (admin `3761be3`, design `1c38716`): the rollback test drops its blocker in
+  a `finally` block; the keys check requires exactly the nine rebuilt keys and indexes on
+  `application` in `dbo`; the portal case test skips only on a failed `SELECT 1`, so reset and
+  migration errors fail it, and it covers selecting both spellings. With an invalid statement
+  appended to 015, that test reports 4 errors and no skips. Both admin modules pass (6 tests).
+  GitHub CI runs the full admin suite on push.
 - Portal unit **283 passed**; ruff, format and strict mypy passed.
 - Admin-environment `check_contracts.py --console --sql` on the final tips: API, CSV, migration
   bytes, guides, console routes and SQL view metadata match.
