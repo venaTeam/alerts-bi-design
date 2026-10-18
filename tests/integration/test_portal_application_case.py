@@ -62,10 +62,14 @@ def _finding(application: str, key: str, message: str) -> dict[str, object]:
 
 @pytest.fixture(scope="module")
 def portal() -> Iterator[TestClient]:
+    # Only an unreachable server may skip. reset_test_database also applies every migration,
+    # so a broken 015 must fail these tests rather than read as missing infrastructure.
     try:
-        reset_test_database(CONFIG.sql, DB)
+        with connect(CONFIG.sql, "master") as master:
+            master.query_one("SELECT 1 AS ready")
     except Exception as exc:  # pragma: no cover - environment dependent
         pytest.skip(f"SQL Server is not reachable: {exc}")
+    reset_test_database(CONFIG.sql, DB)
     payload = PersistencePayload(
         run=sample_run(run_id=RUN_ID, team_id=TEAM, team_display_name="Case Team"),
         findings=[_finding(*alert) for alert in ALERTS],
@@ -97,11 +101,16 @@ def test_the_selector_lists_both_spellings_and_the_filter_matches_one(
         reviews = team_reviews(db, TEAM)
         upper = load_portal_summary(db, TEAM, RUN_ID, ApplicationFilter(("Moby",)))
         lower = load_portal_summary(db, TEAM, RUN_ID, ApplicationFilter(("moby",)))
+        both = load_portal_summary(db, TEAM, RUN_ID, ApplicationFilter(("Moby", "moby")))
     assert reviews[-1].applications.options == ("Moby", "moby")
     assert {(a.application, a.key_field) for a in upper.alerts} == {("Moby", SHARED_KEY)}
     assert {(a.application, a.key_field) for a in lower.alerts} == {
         ("moby", SHARED_KEY),
         ("moby", "cpu:node-2"),
+    }
+    # Selecting both spellings returns all three identities, none merged.
+    assert {(a.application, a.key_field) for a in both.alerts} == {
+        (application, key) for application, key, _message in ALERTS
     }
 
 
