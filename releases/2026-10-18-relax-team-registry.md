@@ -113,3 +113,17 @@ Executed on these documentation and test changes:
 
 The new design snapshot must be merged with a merge commit before its consumer PRs so its
 recorded SHA stays reachable. Merge admin next, then portal. Deployment remains separate.
+
+## Strict SQL release preflight
+
+The follow-up to the review at `11ce9c9` adds `REQUIRE_SQL=1` to the documented release
+command. In this mode any failed SQL preflight fails pytest rather than reporting a skip;
+exploratory runs without the flag retain the existing skip behavior. Migration/reset errors
+remain failures in either mode. No canonical snapshot inputs changed, so the consumer pin
+`2ea8c29` and both application heads remain unchanged.
+
+Verified through the pytest entry point against local SQL: the nine-identity route check
+passed with `REQUIRE_SQL=1`; deliberately invalid local credentials produced exit 1 and one
+failed test with the flag, and exit 0 with one skip without it. Neither failed preflight
+reached database reset. Focused ruff lint/format, canonical docs and diff whitespace checks
+passed. These are synthetic local checks, not production access.

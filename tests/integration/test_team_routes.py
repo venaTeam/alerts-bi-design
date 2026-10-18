@@ -1,5 +1,6 @@
 """Published free-form and case-distinct team IDs through the installed portal."""
 
+import os
 from datetime import datetime, timedelta
 
 import pytest
@@ -23,11 +24,13 @@ def test_portal_routes_preserve_slash_percent_dot_and_case_identity() -> None:
     database = config.sql.test_database
     if config.sql.host not in ("localhost", "127.0.0.1") or database != "alerts_bi_test":
         pytest.fail("Team-route integration requires local SQL Server and alerts_bi_test")
-    # Only connectivity may skip; migration/reset failures must remain failures.
+    # Exploratory runs may skip unavailable SQL; release checks must fail closed.
     try:
         with connect(config.sql, "master") as master:
             master.query_one("SELECT 1 AS ready")
     except Exception as exc:  # pragma: no cover - environment dependent
+        if os.environ.get("REQUIRE_SQL") == "1":
+            pytest.fail(f"Required SQL preflight failed ({type(exc).__name__})", pytrace=False)
         pytest.skip(f"SQL Server is not reachable: {exc}")
     reset_test_database(config.sql, database)
     teams = [

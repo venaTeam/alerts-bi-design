@@ -39,15 +39,18 @@ From a clean Python 3.12+ virtual environment, install those exact files and the
 python -m pip install <artifacts>/alerts_bi_shared-0.1.8-py3-none-any.whl <artifacts>/alerts_bi_operations-0.2.6-py3-none-any.whl <artifacts>/alerts_bi_admin-0.1.0-py3-none-any.whl <artifacts>/alerts_bi_portal-0.1.0-py3-none-any.whl pytest httpx
 $env:SQL_HOST = '127.0.0.1'
 $env:SQL_TEST_DATABASE = 'alerts_bi_test'
+$env:REQUIRE_SQL = '1'
 # Supply SQL_USER, SQL_PASSWORD and SQL_ENCRYPT for the local disposable SQL Server.
 python -m pytest tests/integration/test_team_routes.py -q -rs
 python scripts/check_contracts.py --console --sql
 ```
 
 Run serially with no other test resetting `alerts_bi_test`. This targeted test needs SQL only,
-refuses a nonlocal server or another database name, and resets that disposable database. Only
-unreachable SQL may skip; schema or migration failures must fail. Release evidence must show
-an executed pass with no skips. The full coordinated suite uses `run_integration.py` above,
+refuses a nonlocal server or another database name, and resets that disposable database.
+The release command sets `REQUIRE_SQL=1`: every preflight failure, including bad credentials
+or unavailable SQL, fails the check instead of skipping. Without the flag, exploratory runs
+may skip a failed SQL preflight; schema or migration failures always fail. Release evidence
+must show an executed pass with no skips. The full coordinated suite uses `run_integration.py` above,
 which fails on missing infrastructure instead of allowing a skipped release gate.
 
 `check_docs.py` checks canonical syntax and navigation only. `check_contracts.py` verifies
