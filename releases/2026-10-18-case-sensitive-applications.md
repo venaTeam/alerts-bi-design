@@ -53,8 +53,8 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
 - Admin integration (`tests/integration`, `tests/engine/integration`, `tests/engine/acceptance`)
   on the final tip: **194 passed**, no skips. An earlier run of the same tip through
   `scripts/ci_integration.py` reported 1 failed and 193 passed, and its failure name was not
-  captured; the immediate rerun passed fully. The linked key_field session may have been using
-  the same local `alerts_bi_test` at the time. Unit **944 passed**. Ruff, format, strict mypy
+  captured; the immediate rerun passed fully. The linked key_field session confirmed that its
+  tests were resetting the same local `alerts_bi_test` during that run. Unit **944 passed**. Ruff, format, strict mypy
   and lock validation passed. The first submission ran 192 passed and unit 943.
 - Portal unit **283 passed**; ruff, format and strict mypy passed.
 - Admin-environment `check_contracts.py --console --sql`: API, CSV, migration bytes, guides,
