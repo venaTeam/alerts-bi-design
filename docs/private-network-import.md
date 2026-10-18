@@ -49,8 +49,8 @@ squashed or rebased merge request removes it. The next import then asks for a ne
 The private repositories were updated by hand until now, so the first run needs a baseline:
 ZIPs of the GitHub commits the private code contains, normally the ZIPs of the last manual
 import. Bring them along with the new ZIPs. The agent lists every file where the private code
-differs from them and asks before recording the baseline. Only the Dockerfile and
-`.gitlab-ci.yml` should differ.
+differs from them. Only the Dockerfile and `.gitlab-ci.yml` should differ; if anything else
+does, it stops and asks before recording the baseline.
 
 ## Installing the skill
 

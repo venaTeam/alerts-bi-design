@@ -10,7 +10,9 @@ Then create the merge request with the GitLab MCP:
 
 - source branch `<branch>`, target branch `main`;
 - title `Import GitHub <repository> <old 8>..<new 8>`, prefixed with `Draft: ` when a check
-  failed or a decision is still open;
+  that this import could break failed, or a decision about this import is still open. Checks
+  that could not run here and problems that were already on `main` do not make it a draft;
+  list them;
 - the description below;
 - squash off; deleting the source branch after merge is fine.
 
@@ -63,14 +65,18 @@ Not run: <command: reason>
 
 Build them from the import JSON. Also read new or changed GitHub documents that describe a
 release: `releases/*` in design, and `docs/*env-changes.md`, `docs/handoffs/*` and
-`docs/upstream/*` in admin and portal. Copy their deployment steps.
+`docs/upstream/*` in admin and portal. Copy the deployment steps that apply to this
+repository. For a step that belongs to another repository, name that repository's merge
+request instead of repeating the step. When the release notes give an order across
+repositories, state it in every affected merge request. Without one, deploy admin before
+portal when both change migrations or contracts.
 
 | JSON | Tell the person deploying |
 |---|---|
-| `new_migrations` | The new migration files. Admin applies them with `alerts-bi-admin db setup` (its init container does this on deploy). Migrations are not rolled back, so a database backup must exist first |
-| `environment_keys` | Each key added or removed, and the ConfigMap or Secret entry it needs |
+| `new_migration_files` | The new migrations. Admin applies them with `alerts-bi-admin db setup` (its init container does this on deploy). Migrations are not rolled back, so a database backup must exist first |
+| `environment_keys` | Each key added or removed, per template file, and the ConfigMap or Secret entry it needs |
 | `dependencies` | New or changed packages, and whether Artifactory provided them |
 | `container` | What changed in the image and what you ported into the private Dockerfile |
 | `deployment` | Changes under `deploy/` that the private OpenShift configuration may need |
-| `contracts` | Changed SQL view or API contracts. Deploy admin before portal when portal depends on them |
+| `contracts` | Changed SQL view or API contracts |
 | `config` | Changes to `config/teams.json` or its schema |

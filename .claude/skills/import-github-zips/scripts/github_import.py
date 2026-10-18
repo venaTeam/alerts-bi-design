@@ -426,16 +426,20 @@ def blob(repo: Path, rev: str, path: str) -> bytes | None:
 
 def environment_keys(
     repo: Path, old: str, new: str, entries: list[dict[str, str]]
-) -> dict[str, list[str]]:
-    added, removed = set(), set()
+) -> dict[str, dict[str, list[str]]]:
+    """Settings added to or removed from each changed .env template."""
+    changes = {}
     for entry in entries:
         if entry["category"] != "environment":
             continue
         before = set(ENV_KEY.findall(blob(repo, old, entry.get("from", entry["path"])) or b""))
         after = set(ENV_KEY.findall(blob(repo, new, entry["path"]) or b""))
-        added |= {key.decode() for key in after - before}
-        removed |= {key.decode() for key in before - after}
-    return {"added": sorted(added), "removed": sorted(removed)}
+        if before != after:
+            changes[entry["path"]] = {
+                "added": sorted(key.decode() for key in after - before),
+                "removed": sorted(key.decode() for key in before - after),
+            }
+    return changes
 
 
 def grouped(entries: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
@@ -523,7 +527,10 @@ def cmd_baseline(args: argparse.Namespace) -> None:
         "github_commit_time": iso(archive.commit_time),
         "target": args.target,
         "snapshot": snapshot,
-        "note": "status A: only in the private repository; D: only on GitHub; M: differs",
+        "note": (
+            "A: only in the private repository; D: only on GitHub; M: differs. A dry run "
+            "writes only an unreferenced snapshot object; --confirm writes a new one."
+        ),
         "expected_differences": expected,
         "unexpected_differences": unexpected,
         "recorded": False,
@@ -661,12 +668,18 @@ def cmd_import(args: argparse.Namespace) -> None:
             },
             "private_changes": private_changes,
             "environment_keys": environment_keys(repo, base, snapshot, github_changes),
-            "new_migrations": [
+            "new_migration_files": [
                 entry["path"]
                 for entry in github_changes
                 if entry["category"] == "migrations" and entry["status"] == "A"
             ],
-            "next": "Resolve conflicts, review, verify, then `git commit --no-edit`.",
+            "next": (
+                "Resolve the conflicts, review, then `git add` and `git commit --no-edit`."
+                if conflicts
+                else "Review, then `git commit --no-edit`."
+            )
+            + f" Afterwards `git diff --name-status {snapshot[:12]} HEAD` must list only"
+            " paths from private_changes.",
         }
     )
 

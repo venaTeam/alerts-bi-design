@@ -17,7 +17,7 @@ What differs here from GitHub:
 | `Dockerfile` | Same logic as GitHub; private sources: base image registry, Artifactory package index, certificates, proxies |
 | `.gitlab-ci.yml` | Exists only here; GitHub uses `.github/workflows/` instead |
 | `AGENTS.md`, `CLAUDE.md`, `.claude/` | Identical to GitHub today; may get private wording later |
-| Everything else | Identical to GitHub |
+| Everything else | Identical to GitHub, byte for byte |
 
 ## How the import works
 
@@ -28,8 +28,9 @@ What differs here from GitHub:
 2. It merges that snapshot into a new branch made from `origin/main`, so git compares against
    the previous import: a file changed only on GitHub is taken, a file changed only here is
    kept, and a file changed on both sides conflicts.
-3. It prints JSON: GitHub's changes by category, this network's own changes, conflicts, files
-   to review, added or removed environment keys and new migrations.
+3. It prints JSON: GitHub's changes by category, this network's own changes
+   (`private_changes`), conflicts, files to review, changed environment keys and new
+   migration files.
 
 The next import finds its starting point through the snapshot that reached `main` with the
 merge request. That is why merge requests must be merged with a merge commit, never squashed
@@ -37,13 +38,15 @@ or rebased.
 
 ## Before you start
 
-- Set `S` to this skill's `scripts/github_import.py`. Run it with `python3` (or `python`).
+- Set `S` to this skill's `scripts/github_import.py`. Run it with `python3`, `python` or
+  `py -3`, whichever is a real Python 3.9+.
 - Find the ZIPs. GitHub names them `alerts-bi-<name>-main.zip`; browsers may add ` (2)`. Do not
   extract or repack them. If they come inside one outer archive, extract only that outer
   archive, into a new empty folder outside the clones.
 - Run `python3 $S inspect <zip>...`. Each ZIP must show a `repository` and a `github_commit`.
   Without a commit id, ask the user for the full GitHub commit id and pass `--github-commit`.
-  With two ZIPs of one repository, the older one is a first-run baseline; otherwise ask.
+- If one repository has more than one ZIP, ask the user what each is for. Never pick a
+  baseline yourself.
 - Find each clone in the workspace (`alerts-bi-admin`, `alerts-bi-portal`, `alerts-bi-design`).
   Ask if one is missing.
 
@@ -51,9 +54,10 @@ or rebased.
 
 Repositories are independent; import each one fully before the next.
 
-1. **Prepare.** Run `git -C <clone> fetch origin`. With the GitLab MCP, look for an open merge
-   request from a `chore/github-import-*` branch in this project. If one is open, stop and ask:
-   two imports from the same base split the snapshot history. Then run
+1. **Prepare.** Run `git -C <clone> fetch --prune origin`. Look for an import that is still
+   open: `git -C <clone> branch -r --no-merged origin/main --list 'origin/chore/github-import-*'`,
+   and, when the GitLab MCP is available, open merge requests from such branches. If one
+   exists, stop and ask: two imports from the same base split the snapshot history. Then run
    `python3 $S status --repo <clone> --repository <name>`. Stop and ask if `clean` is false or
    `merge_in_progress` is true. If `needs_baseline` is true, follow
    [references/first-run.md](references/first-run.md) first.
@@ -62,18 +66,23 @@ Repositories are independent; import each one fully before the next.
    Keep the JSON: it drives the rest and the merge request. `up_to_date: true` means nothing to
    do for this repository. Exit status 2 prints `error`: do what it says, and never work around
    it by copying files by hand.
-3. **Resolve and review**, using the rules below. Look at:
+3. **Resolve and port**, using the rules below. Look at:
    - every path in `conflicts`;
    - every path in `review_auto_merged`: changed on both sides and merged by git;
    - every entry under `github_changes.by_category` `container` and `ci`, even without a
      conflict, because a cleanly merged Dockerfile line can still point to a public source.
-4. **Verify** (see below). Fix what the import broke in further commits on the branch.
-5. **Commit.** `git add` the resolved files, then `git commit --no-edit`. The script prepared
-   the merge message.
+
+   Conflict resolutions and the Dockerfile and GitLab CI changes you port belong in the merge
+   commit.
+4. **Commit the merge.** `git add` the resolved files, then `git commit --no-edit`. The script
+   prepared the message. Then `git diff --name-status <snapshot> HEAD` must list only paths
+   from `private_changes`; anything else means GitHub's version was not taken somewhere.
+5. **Verify** (see below). Fix what the import broke in further commits on the branch.
 6. **Push with git:** `git push -u origin <branch>`. Never push the branch's files through
    the GitLab MCP; that creates new commits and loses the snapshot history.
-7. **Open the merge request** with the GitLab MCP, as described in
+7. **Open the merge request** as described in
    [references/merge-request.md](references/merge-request.md).
+8. Switch the clone back with `git checkout main`.
 
 ## Rules
 
@@ -83,12 +92,14 @@ GitHub's logic changes into it: `COPY` lines, build and install steps, tool vers
 application defaults, `EXPOSE`, `USER`, `ENTRYPOINT`, `CMD`. Write them with the private
 sources. Afterwards, the merged Dockerfile must not reference a registry or index the private
 version did not already use (for example `docker.io`, `ghcr.io`, `pypi.org`,
-`files.pythonhosted.org`). Every `COPY` source must exist in the merged tree.
+`files.pythonhosted.org`), and every `COPY` source GitHub added must exist in the merged tree.
 
 **`.gitlab-ci.yml`.** Keep it. When GitHub adds, changes or removes a check command in
 `.github/workflows/`, such as lint, type checks, tests or a build step, make the same change in
-the matching GitLab job. Do not add services, runners, images or variables; list such needs
-in the merge request instead.
+the GitLab job that runs the same kind of check. If no GitLab job matches and the command
+needs no service, add it to the job that runs the other checks; otherwise list it as not
+ported. Tool versions in `.gitlab-ci.yml`, such as Poetry, follow GitHub's workflows. Do not
+add services, runners, images or variables; list such needs in the merge request instead.
 
 **`.github/`.** Take GitHub's version as it is. It does not run here.
 
@@ -97,36 +108,42 @@ in the merge request instead.
 add GitHub's new guidance unless it is about GitHub, its workspace or its tooling.
 
 **Everything else** (code, tests, docs, contracts, migrations, `pyproject.toml`,
-`poetry.lock`, `vendor/` wheels, `config/`, `deploy/`): GitHub wins. Never edit dependency
-pins or relock to work around Artifactory. A path of this kind in `private_changes` is a
-private **hotfix**:
+`poetry.lock`, `vendor/` wheels, `config/`, `deploy/`): GitHub wins, byte for byte, line
+endings included. Never edit dependency pins or relock to work around Artifactory. A path of
+this kind in `private_changes` is a private **hotfix**:
 - GitHub's new version already contains the same fix: take GitHub's version.
 - The changes are independent: keep both.
 - They contradict each other, or you cannot tell: stop and ask.
 
 Name every hotfix in the merge request, so that it can also be made on GitHub.
 
+**Problems that were already on `main`** before this import, such as a CI job that no longer
+fits or a missing file, are not this import's to fix. List them under "Needs a decision".
+
 ## Verify
 
 Run what this repository's `.gitlab-ci.yml` runs, as far as the tools and services here allow.
-Usually that means:
+For admin and portal that usually means:
 
 - `poetry check --lock` and `poetry install`, which proves Artifactory provides every
   dependency;
 - `ruff check .`, `ruff format --check .` and `mypy` through `poetry run`;
-- the unit tests (`poetry run pytest tests/unit` or what CI runs);
-- `docker build` (or `podman build`) with the private Dockerfile, for admin and portal.
+- the unit tests that CI runs. If GitHub's workflow runs tests that GitLab CI does not, such
+  as new test folders, run them too and list the gap;
+- `docker build` (or `podman build`) with the private Dockerfile. It also proves that
+  Artifactory provides new tool versions, such as a Poetry bump; if it cannot run, list those
+  versions as unverified.
 
-Integration tests need SQL Server and the Elasticsearch mock; run them only where CI here does
-and the services exist. Design has no image; run its docs check. Record each command and
-result, and name every check you could not run and why. If Artifactory lacks a package or
-version, list the exact `name==version` and stop for that repository: someone must request it.
+Design builds no image; run the checks its `AGENTS.md` lists under Verification. Integration
+tests need SQL Server and the Elasticsearch mock; run them only where CI here does and the
+services exist. Record each command and its result, and name every check you could not run and
+why. If Artifactory lacks a package or version, list the exact `name==version` and stop for
+that repository: someone must request it.
 
 ## Stop and ask
 
-- `status` shows a dirty clone or a merge in progress, or an import merge request is already
-  open.
-- A first run finds differences beyond the Dockerfile, `.gitlab-ci.yml` and `.github/`.
+- `status` shows a dirty clone or a merge in progress, or an import is still open.
+- A first run finds unexpected differences.
 - GitHub changes the base image or Python version, switches build tool, or adds a system
   package or a CI service that this network may not provide.
 - A dependency cannot be installed from Artifactory.
@@ -150,4 +167,5 @@ and decisions the user must make. Repositories without a ZIP or already up to da
 
 This skill's source is `.claude/skills/import-github-zips/` in alerts-bi-design. After you
 import design, compare that folder in the design clone with the copy you are running. If they
-differ, tell the user and offer to replace the installed copy.
+differ, tell the user and offer to replace the installed copy. If the design clone does not
+have the folder yet, say so.
