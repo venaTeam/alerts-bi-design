@@ -4,9 +4,9 @@ This supersedes the initial registry-only verification recorded earlier today.
 
 ## Tested revisions and contract
 
-- Admin `28ac22d` (base `03d4c6c453eba35ca7e54f0696daf542abd9e0d4`).
-- Portal `a437410` (base `52547da`).
-- Both pin design `e19a31f296f2d4c480bb25a67357fcbab3bf6c78`.
+- Admin `06ff893a2a84276fc27b428f83e1c15fc318a160` (runtime code unchanged from `28ac22d`) (base `03d4c6c453eba35ca7e54f0696daf542abd9e0d4`).
+- Portal `9ebb0a63e94055779f6f6a0bb7e59316aa8db8da` (runtime code unchanged from `a437410`) (base `52547da`).
+- Both pin design `2ea8c29eea8c71039164acb2f24881e425774a64` (supersedes `e19a31f`).
 - Shared `0.1.8`, operations `0.2.6`; branch `fix/relax-team-registry` in all three repositories.
 
 Duplicate operators remain allowed within v1 lists and across teams. No team ID slug regex
@@ -88,7 +88,7 @@ runbook covers one backup and a sized maintenance window for all pending revisio
 
 ## Follow-up review fixes
 
-The next commits correct the migration 017 backup, sizing, maintenance-window and rollback
+The follow-up commits correct the migration 017 backup, sizing, maintenance-window and rollback
 instructions in the canonical runbook and both application READMEs. The design now explicitly
 identifies schema descriptions as normative consumer-enforced semantics; no regex is added.
 The coordinated-test setup and the difference between syntax and artifact-hash checks are
