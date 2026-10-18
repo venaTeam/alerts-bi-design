@@ -21,14 +21,22 @@ The dependent objects come from the catalog of an `alerts_bi_test` migrated to 0
 keys and indexes above, one auto-created statistic per table, and the three views. No foreign
 key, check constraint, computed column or schema-bound module references `key_field`.
 
-Revisions: admin `3b2ea1f` (migration, readiness, tests), `97d2b01` (snapshot), `3bc70d2`
-(merge of the 015 test follow-up `3e1f322`) and `04205a7` (more 016 tests); design `e5c02d1`
-(decision, contracts, deployment note); portal `5c0bda0` (snapshot). Both consumers pin design
-`e5c02d1`. All three branches are `fix/case-sensitive-key-fields`, stacked on the open 015
-branches `fix/case-sensitive-applications` (admin `3e1f322`, design `e2c1c53`, portal
-`adb96bb`). Adding 016 required one change to the 015 branch's tests: both tests in
-`test_migration_015_upgrade.py` migrated to head, so they now stop at revision 015 explicitly,
-and readiness after 015 names 016.
+Revisions:
+- Admin: `3b2ea1f` (migration, readiness, tests), `97d2b01` (snapshot), `3bc70d2` and
+  `c6847fa` (merges of the 015 review rounds), `04205a7` (more 016 tests) and `12453a5` (LF line
+  endings, rollback isolation).
+- Design: `e5c02d1` (decision, contracts, deployment note) and `270de28` (merge of 015 round
+  three).
+- Portal: `5c0bda0` (snapshot) and `d73f1e0` (merge).
+
+Both consumers pin design `270de28`. All three branches are `fix/case-sensitive-key-fields`,
+stacked on the open 015 branches `fix/case-sensitive-applications` (admin `741f39f`, design
+`dde3ad6`, portal `2798285`). The merges keep the 015 changes as they are, apart from the
+snapshot pin and one adjustment to the 015 branch's tests that adding 016 required: both tests
+in `test_migration_015_upgrade.py` migrated to head, so they now stop at revision 015
+explicitly, and readiness after 015 names 016. The 016 deployment note follows the 015 rule that nothing
+may cut the rebuild short: a failed or killed 016 rolls back alone, and the next start repeats
+only its lock window.
 
 Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the seeded ES mock:
 
@@ -60,14 +68,14 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
 - With the 016 files removed, `db setup` against the migrated database stops with `Can't
   locate revision identified by '016_case_sensitive_key_fields'`. This is the roll-forward-only
   behavior recorded in openshift-deployment.md.
-- Admin `scripts/ci_integration.py` on `04205a7`, zero skips: **203 passed** (196 on the 015
+- Admin `scripts/ci_integration.py` on `12453a5`, zero skips: **203 passed** (196 on the 015
   branch plus the seven new integration tests).
 - Unit **945 passed**. Ruff, format, strict mypy and lock validation passed.
 - Portal unit **283 passed**; ruff, format and strict mypy passed.
-- Admin-environment `check_contracts.py --console --sql`: API, CSV, migration bytes, guides,
+- Admin-environment `check_contracts.py --console --sql` on design `270de28`: API, CSV, migration bytes, guides,
   console routes and SQL view metadata match.
 - Coordinated `run_integration.py --registry config/teams.json` with the portal worktree
-  installed: **81 passed**.
+  installed: **81 passed**, zero skips.
 - Browser, against `alerts_bi_test` with a published week holding `disk:Node-1` and
   `disk:node-1` in `case-app`, each with its own confirmed decision: the portal's Fix list
   showed two alerts, and each alert's detail showed only its own decision. The admin console's
