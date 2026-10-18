@@ -11,6 +11,7 @@ Canonical product design, contracts, accepted decisions, and coordinated release
 - design: `docs/outputs.md` — Output and API meanings.
 - design: `docs/async-runs.md` — Durable manual submissions, worker/recovery, HTTP compatibility and output storage.
 - design: `docs/backfill.md` — Operator multi-week backfill: selection, queued job states, worker claim order and weekly priority.
+- delivery: `docs/private-network-sync.md` — How GitHub ZIPs reach the private network; the `.claude/skills/sync-from-github` skill runs there, not here.
 
 ### Verification
 
