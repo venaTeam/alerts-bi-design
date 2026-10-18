@@ -220,7 +220,7 @@ Applied SQL and revision modules 001–008, schema head `008_measurement_basis`,
 analysis versions, deterministic identities, registry content and the hand-authored oracle
 remain unchanged. The migration-only `src.db.ledger` bridge is retained. Shared/operations
 0.1.3 records the producer relocation while preserving their public namespaces and behavior.
-Admin uses its local uv workspace packages; portal pins an immutable shared wheel. The legacy
+Admin uses its local path packages; portal pins an immutable shared wheel. The legacy
 API factory is a wire-contract test harness only, with no standalone server entry point.
 
 This change prepares source, artifacts and deployment examples. PR delivery does not deploy,
