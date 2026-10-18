@@ -25,8 +25,8 @@ def main() -> None:
     ):
         assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))
-    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 14
-    assert "014_backfills" == migrations["schema_head"]
+    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 15
+    assert "015_case_sensitive_applications" == migrations["schema_head"]
     console = json.loads((ROOT / "contracts/console-http.json").read_text("utf-8"))
     assert console["schema_head"] == migrations["schema_head"]
     print("Canonical contract JSON and instruction entry points are valid")
