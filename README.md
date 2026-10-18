@@ -19,7 +19,16 @@ Keep parent workspace routing outside Git; `workspace/workspace-spec.json` is th
 
 ## Checks
 
-`uv sync --frozen` and `uv run python scripts/check_docs.py` validate documentation inputs.
+Python 3.12+ and Poetry 2.3.1 are required. Design is not a distributable package
+(`package-mode = false`), so `poetry sync` installs only the locked check tools from the
+committed `poetry.lock`; `poetry check --lock` validates it.
+
+```powershell
+poetry sync
+poetry run python scripts/check_docs.py
+```
+
+`check_docs.py` validates documentation inputs.
 For coordinated checks, install the admin and portal wheels plus shared/operations wheels
 into an isolated environment. Run `python scripts/check_contracts.py --sql --console`, then
 `python scripts/run_integration.py --registry <admin-registry-artifact>`. Provide only local
