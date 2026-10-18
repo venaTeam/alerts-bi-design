@@ -1,5 +1,33 @@
 # Alerts BI — Design Document
 
+## Exact application identity in SQL — accepted 2026-10-18
+
+An alert's identity is the exact `application` + `key_field` pair (section 3.7). The engine
+already compared these values exactly. Every stored `application` column, however, used the
+database's case-insensitive default collation. Applications such as `Moby` and `moby` in one
+team's window were therefore two identities in memory and one value in SQL. The second insert
+into `run_summaries`, `run_application_daily` or, for a shared `key_field`, `alert_findings`
+violated the primary key, so the whole run failed to persist. Rerunning failed the same way
+until the data changed. Across separate weeks, the portal's application options merged the
+spellings, and its filter matched both.
+
+Applications that differ only in case are separate applications. Migration
+`015_case_sensitive_applications` stores `application` with `Latin1_General_100_BIN2` in
+`alert_findings`, `llm_verdicts`, `finding_decisions`, `run_alert_list`, `run_summaries`,
+`run_application_daily` and `run_v1_rules`, and refreshes the portal views that expose it.
+Keys, verdict reuse, decisions, application filters and the portal's application options
+compare exactly, matching the engine and the existing case-sensitive operator and suppression
+rules (section 7.6). Existing rows cannot contain case-only duplicates, so the rebuilt keys
+cannot conflict. The migration rebuilds the affected keys and indexes once. Its downgrade is
+refused, because rows written afterwards may collide under the old collation. The view column
+types in `contracts/sql-views.json` are unchanged.
+
+Not covered: `key_field` keeps the default collation. Two keys that differ only in case within
+the same exact application still collide, as before. SQL Server's string equality also ignores
+trailing spaces, even under a binary collation, so `moby` and `moby ` remain one value. Neither
+has been observed. Changing either needs a separate approved change.
+`llm_batch_attempts.group_value` is audit text, not part of any key, and is unchanged.
+
 ## SQL connection encryption — accepted 2026-10-17
 
 `SQL_ENCRYPT` and `SQL_TRUST_SERVER_CERTIFICATE` were read but never applied, so
