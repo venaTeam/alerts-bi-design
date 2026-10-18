@@ -16,6 +16,7 @@ now live under admin's `src/engine`; the installed namespace is `alerts_bi_admin
 | admin | config, scripts, test/fixtures, tests/engine | Registry, original mock tooling and acceptance coverage |
 | portal | src | GET-only published views and reader pages |
 | design | docs, decisions, contracts, releases | Requirements and compatibility evidence |
+| design | .claude/skills/import-github-zips | Private-network import of GitHub ZIPs ([process](private-network-import.md)) |
 
 Supported executables are `alerts-bi-admin` and `alerts-bi-portal`. Admin is independently
 buildable using its committed Poetry lock; portal pins an immutable shared wheel produced by

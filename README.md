@@ -27,3 +27,6 @@ SQL/ES test settings. Suites reset only `alerts_bi_test` and run serially. The o
 generator and oracle are maintained in admin; no duplicate fixture system lives here.
 
 PR delivery is separate from deployment, merge and eventual repository archival.
+
+Code reaches the private network as GitHub ZIP downloads; `docs/private-network-import.md`
+explains each delivery and the `import-github-zips` skill that imports them there.
