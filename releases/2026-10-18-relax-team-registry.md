@@ -4,7 +4,7 @@ This supersedes the initial registry-only verification recorded earlier today.
 
 ## Tested revisions and contract
 
-- Admin `06ff893a2a84276fc27b428f83e1c15fc318a160` (runtime code unchanged from `28ac22d`) (base `03d4c6c453eba35ca7e54f0696daf542abd9e0d4`).
+- Admin `89875e9fccd3df37f66e3656dea16e86a68bbbeb` (runtime code unchanged from `28ac22d`) (base `03d4c6c453eba35ca7e54f0696daf542abd9e0d4`).
 - Portal `9ebb0a63e94055779f6f6a0bb7e59316aa8db8da` (runtime code unchanged from `a437410`) (base `52547da`).
 - Both pin design `2ea8c29eea8c71039164acb2f24881e425774a64` (supersedes `e19a31f`).
 - Shared `0.1.8`, operations `0.2.6`; branch `fix/relax-team-registry` in all three repositories.
@@ -127,3 +127,17 @@ passed with `REQUIRE_SQL=1`; deliberately invalid local credentials produced exi
 failed test with the flag, and exit 0 with one skip without it. Neither failed preflight
 reached database reset. Focused ruff lint/format, canonical docs and diff whitespace checks
 passed. These are synthetic local checks, not production access.
+
+## Final review clarifications
+
+Admin `89875e9` qualifies the older manifest-rollback passage with the same migration recovery
+requirements, clarifies the historical TLS version and renames the empty-operator test. Its
+48 registry tests and focused lint/format pass; no application runtime code changed.
+
+`REQUIRE_SQL` now fails closed for any nonempty value except `0`. Through the pytest entry
+point, valid local SQL with `true` passed the nine-identity route check. Invalid credentials
+with `true`, `yes` and ` 1` each failed with exit 1; `0` and empty retained the explicitly
+optional skip. Focused lint/format, docs and whitespace checks passed. The localhost-only
+reset boundary is intentional; support for remote or container hosts is outside this change.
+Design CI provisioning remains a documented limitation; local release evidence includes
+executed SQL/contract checks without skips. The consumer snapshot pin remains `2ea8c29`.

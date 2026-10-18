@@ -29,7 +29,7 @@ def test_portal_routes_preserve_slash_percent_dot_and_case_identity() -> None:
         with connect(config.sql, "master") as master:
             master.query_one("SELECT 1 AS ready")
     except Exception as exc:  # pragma: no cover - environment dependent
-        if os.environ.get("REQUIRE_SQL") == "1":
+        if os.environ.get("REQUIRE_SQL", "") not in ("", "0"):
             pytest.fail(f"Required SQL preflight failed ({type(exc).__name__})", pytrace=False)
         pytest.skip(f"SQL Server is not reachable: {exc}")
     reset_test_database(config.sql, database)

@@ -47,10 +47,12 @@ python scripts/check_contracts.py --console --sql
 
 Run serially with no other test resetting `alerts_bi_test`. This targeted test needs SQL only,
 refuses a nonlocal server or another database name, and resets that disposable database.
-The release command sets `REQUIRE_SQL=1`: every preflight failure, including bad credentials
-or unavailable SQL, fails the check instead of skipping. Without the flag, exploratory runs
-may skip a failed SQL preflight; schema or migration failures always fail. Release evidence
-must show an executed pass with no skips. The full coordinated suite uses `run_integration.py` above,
+The release command sets `REQUIRE_SQL=1`. Any nonempty value other than `0` requires SQL,
+so values such as `true` or a mistyped value cannot silently skip. Every preflight failure,
+including bad credentials or unavailable SQL, fails the check instead of skipping. With the
+flag unset, empty or `0`, exploratory runs may skip a failed SQL preflight; schema or migration
+failures always fail. Release evidence must show an executed pass with no skips. The full
+coordinated suite uses `run_integration.py` above,
 which fails on missing infrastructure instead of allowing a skipped release gate.
 
 `check_docs.py` checks canonical syntax and navigation only. `check_contracts.py` verifies
