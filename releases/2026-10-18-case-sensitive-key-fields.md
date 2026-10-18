@@ -21,13 +21,14 @@ The dependent objects come from the catalog of an `alerts_bi_test` migrated to 0
 keys and indexes above, one auto-created statistic per table, and the three views. No foreign
 key, check constraint, computed column or schema-bound module references `key_field`.
 
-Revisions: admin `3b2ea1f` (migration, readiness, tests) and `97d2b01` (snapshot), design
-`e5c02d1` (decision, contracts, deployment note), portal `5c0bda0` (snapshot). Both consumers
-pin design `e5c02d1`. All three branches are `fix/case-sensitive-key-fields`, stacked on the
-open 015 branches `fix/case-sensitive-applications` (admin `9b0678f`, design `e2c1c53`, portal
-`adb96bb`). Adding 016 required one change to the 015 branch's tests:
-`test_migration_015_upgrade.py` migrated to head, so it now stops at revision 015 explicitly
-and expects readiness to name 016.
+Revisions: admin `3b2ea1f` (migration, readiness, tests), `97d2b01` (snapshot), `3bc70d2`
+(merge of the 015 test follow-up `3e1f322`) and `04205a7` (more 016 tests); design `e5c02d1`
+(decision, contracts, deployment note); portal `5c0bda0` (snapshot). Both consumers pin design
+`e5c02d1`. All three branches are `fix/case-sensitive-key-fields`, stacked on the open 015
+branches `fix/case-sensitive-applications` (admin `3e1f322`, design `e2c1c53`, portal
+`adb96bb`). Adding 016 required one change to the 015 branch's tests: both tests in
+`test_migration_015_upgrade.py` migrated to head, so they now stop at revision 015 explicitly,
+and readiness after 015 names 016.
 
 Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the seeded ES mock:
 
@@ -36,15 +37,20 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
   `llm_verdicts` with exact equality. A rerun reuses each spelling's own verdict with no model
   call. After publishing, a decision on each spelling reads back only through its own identity
   in `portal_alerts`, `portal_alert_list` and `portal_decisions`. Every `key_field` column
-  (4 tables, 3 views) reports BIN2.
+  (4 tables, 3 views) reports BIN2. Each spelling's stored verdict carries its own marker
+  through the rerun. The keys and indexes on `key_field` are exactly the five rebuilt ones,
+  and a member of `alerts_bi_reader` reads `key_field` from the three refreshed views.
 - New `test_migration_016_upgrade.py`: a populated, published 015 database with a decision
   upgrades to 016 with row counts unchanged. Readiness refuses before and passes after, the
   decision reads back by exact key, and the case-only key variant's verdict now fits beside the
-  upgraded row. New unit `test_migration_016.py`: the revision follows 015 and refuses
-  downgrade.
-- Mutation check: with the 016 files removed, all five new integration tests fail. The
+  upgraded row. A schema-bound view on `key_field` makes 016 fail after its keys were
+  dropped. The whole migration then rolls back: head 015, no ledger row, and row counts, keys and
+  collation unchanged. Once the view is removed, a retry applies 016. New unit
+  `test_migration_016.py`: the revision follows 015 and refuses downgrade.
+- Mutation check: with the 016 files removed, six of the seven new integration tests fail. The
   persistence tests fail with the original `pk_alert_findings` duplicate key for
-  `(case-app, disk:node-1)`.
+  `(case-app, disk:node-1)`. The reader-role test still passes, because it guards the grants the
+  view refresh keeps rather than the collision.
 - `db setup` upgraded an existing `alerts_bi_test` built by the acceptance verification at
   015 (8 runs, 477 findings, 441 verdicts) to 016. Row counts and reader grants were unchanged,
   all 7 `key_field` columns (4 tables, 3 views) report BIN2, and the five rebuilt keys and
@@ -54,8 +60,8 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
 - With the 016 files removed, `db setup` against the migrated database stops with `Can't
   locate revision identified by '016_case_sensitive_key_fields'`. This is the roll-forward-only
   behavior recorded in openshift-deployment.md.
-- Admin `scripts/ci_integration.py`, zero skips: **199 passed** (194 on the 015 branch plus
-  the five new integration tests).
+- Admin `scripts/ci_integration.py` on `04205a7`, zero skips: **203 passed** (196 on the 015
+  branch plus the seven new integration tests).
 - Unit **945 passed**. Ruff, format, strict mypy and lock validation passed.
 - Portal unit **283 passed**; ruff, format and strict mypy passed.
 - Admin-environment `check_contracts.py --console --sql`: API, CSV, migration bytes, guides,
