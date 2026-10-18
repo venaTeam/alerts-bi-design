@@ -15,8 +15,8 @@ their keys and indexes verbatim and refreshes the portal views. View column type
 outputs, console routes and the shared/operations libraries are unchanged. No library
 version and no portal code change.
 
-Revisions: admin `e457943` (migration, readiness, regression test), `b6a3086` (review
-follow-up tests) and `9b0678f` (snapshot); design `848731a` (decision, contracts, deployment
+Revisions: admin `e457943` (migration, readiness, regression test), `b6a3086` and `3e1f322`
+(review follow-up tests) and `9b0678f` (snapshot); design `848731a` (decision, contracts, deployment
 note) and `bc01ec8` (release safeguards, visible consequences, coordinated portal test);
 portal `adb96bb` (snapshot). Both consumers pin canonical design `bc01ec8`. The portal's
 previous pin was `d656e42`, so its refresh also carries the already-merged run-output-file
@@ -50,15 +50,27 @@ Executed checks, local SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`) and the 
   sees readiness refuse 014, upgrades through `migrate()` and keeps every row; a unit test
   checks the downgrade refusal. With 015 removed, the persistence tests fail on the
   `pk_alert_findings` duplicate key and the schema test fails.
-- Admin integration (`tests/integration`, `tests/engine/integration`, `tests/engine/acceptance`)
-  on the final tip: **194 passed**, no skips. An earlier run of the same tip through
-  `scripts/ci_integration.py` reported 1 failed and 193 passed, and its failure name was not
-  captured; the immediate rerun passed fully. The linked key_field session confirmed that its
-  tests were resetting the same local `alerts_bi_test` during that run. Unit **944 passed**. Ruff, format, strict mypy
-  and lock validation passed. The first submission ran 192 passed and unit 943.
+- Second review round (admin `3e1f322`): the verdict test marks each spelling's stored verdict
+  with its own justification and requires the rerun to carry it. With the verdict lookup
+  lowercasing `application`, it fails with `Moby` carrying `moby`'s marker. The schema test
+  also requires all nine rebuilt keys and indexes. A member of `alerts_bi_reader` reads all six
+  refreshed views. At 014, a schema-bound view on `alert_findings.application` makes 015 fail
+  after its keys were dropped. The database stays at 014, with no 015 ledger row, unchanged
+  counts, all five primary keys and the old collation. Once the view is dropped, `migrate()`
+  applies 015.
+- Final admin tip `3e1f322`, on a quiet `alerts_bi_test`: `scripts/ci_integration.py`
+  **196 passed**, zero skips. Unit **944 passed**. Ruff, format, strict mypy and lock
+  validation passed. Two earlier runs on intermediate tips overlapped with the linked key_field
+  session on the same local test database. One overlapped its resets and reported 1 failure.
+  The other overlapped its 016 `db setup`. Neither is counted as evidence. The first
+  submission ran 192 passed and unit 943.
+- Migration timeouts: the Alembic engine in `env.py` passes no query timeout, so
+  `SQL_REQUEST_TIMEOUT_MS` does not apply to migrations, and pymssql 2.4.4 defaults to none.
+  The admin Deployment sets no `activeDeadlineSeconds` (only the weekly CronJob has one), so the
+  `migrate` init container is not cut short during a long rebuild.
 - Portal unit **283 passed**; ruff, format and strict mypy passed.
-- Admin-environment `check_contracts.py --console --sql`: API, CSV, migration bytes, guides,
-  console routes and SQL view metadata match.
+- Admin-environment `check_contracts.py --console --sql` on the final tips: API, CSV, migration
+  bytes, guides, console routes and SQL view metadata match.
 - Coordinated `run_integration.py --registry config/teams.json` with the portal worktree
   installed: **81 passed**, including the new `test_portal_application_case.py` (selector lists
   both spellings, IN filter and fix list match one, OPENJSON detail and decision lookups return
