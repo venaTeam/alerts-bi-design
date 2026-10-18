@@ -21,8 +21,26 @@ pytestmark = pytest.mark.integration
 def test_portal_routes_preserve_slash_percent_dot_and_case_identity() -> None:
     config = load_config()
     database = config.sql.test_database
+    if config.sql.host not in ("localhost", "127.0.0.1") or database != "alerts_bi_test":
+        pytest.fail("Team-route integration requires local SQL Server and alerts_bi_test")
+    # Only connectivity may skip; migration/reset failures must remain failures.
+    try:
+        with connect(config.sql, "master") as master:
+            master.query_one("SELECT 1 AS ready")
+    except Exception as exc:  # pragma: no cover - environment dependent
+        pytest.skip(f"SQL Server is not reachable: {exc}")
     reset_test_database(config.sql, database)
-    teams = ["team/a", "team/a/summary", "a%2Fb", "~61", "..", "team-a", "Team-A"]
+    teams = [
+        "team/a",
+        "team/a/summary",
+        "a%2Fb",
+        "~61",
+        "..",
+        "team-a",
+        "Team-A",
+        "a" * 128,
+        "😀" * 64,
+    ]
     end = datetime(2026, 10, 12)
     with connect(config.sql, database) as db:
         for n, team in enumerate(teams):

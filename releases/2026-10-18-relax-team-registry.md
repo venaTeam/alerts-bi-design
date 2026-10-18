@@ -79,7 +79,37 @@ shared 0.1.8 before installing a registry that uses the expanded ID domain. The 
 collation was not inspected; the migration specifies BIN2 independently of that default.
 No production database, registry, deployment or merge was changed during verification.
 
-Rollback requires a registry accepted by the old validator along with the old image. Keep
-migration 017: downgrade is refused because stored case-only variants could collide. Do not
-roll back portal routing while newly encoded team links are in use. README documents these
-prerequisites in each application repository.
+A pre-017 admin image cannot initialize against a 017 database. Recovery needs a compatible
+image that still knows 017, or an explicitly authorized restore of the verified pre-migration
+database backup with its matching image, manifests and registry; that restore loses later
+writes. Downgrade is refused because stored case-only variants could collide. Do not roll
+back portal routing while newly encoded team links remain in use. The canonical deployment
+runbook covers one backup and a sized maintenance window for all pending revisions 015–017.
+
+## Follow-up review fixes
+
+The next commits correct the migration 017 backup, sizing, maintenance-window and rollback
+instructions in the canonical runbook and both application READMEs. The design now explicitly
+identifies schema descriptions as normative consumer-enforced semantics; no regex is added.
+The coordinated-test setup and the difference between syntax and artifact-hash checks are
+now documented. The SQL route test refuses nonlocal databases and skips only a failed SQL
+connectivity preflight, not a broken migration.
+
+Executed on these documentation and test changes:
+
+- Portal: 422 unit tests passed, including 139 new codec/link/HTTP cases covering every
+  entry point, legacy redirects, slash/percent/space/Unicode/dot/tilde IDs, case distinctions
+  and malformed-token 404s before queries. Ruff lint/format and strict mypy (27 files) pass.
+  Query boundaries are mocked in these standalone tests; SQL isolation is checked below.
+- Admin: 50 targeted registry and snapshot tests passed, including both new empty-operator
+  rejection cases; focused ruff lint/format passed.
+- Design: real-SQL team-route test passed with no skips, now including 128 ASCII characters
+  and 64 supplementary-plane characters persisted and rendered through every portal route.
+  Eight existing reader-role tests passed after migration 017, with no skips.
+- `check_contracts.py --console --sql` and `check_docs.py` passed. The focused design mypy
+  invocation could not resolve the setuptools editable admin/portal packages in this local
+  test environment; it is not claimed as passing. App type checks and runtime integration
+  remain separate evidence. The README documents wheel installation for a clean environment.
+
+The new design snapshot must be merged with a merge commit before its consumer PRs so its
+recorded SHA stays reachable. Merge admin next, then portal. Deployment remains separate.
