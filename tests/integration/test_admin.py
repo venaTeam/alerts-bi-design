@@ -1,20 +1,26 @@
-"""The operator admin app, against a disposable SQL Server database (design section 7.12)."""
+"""The operator admin app, against a disposable SQL Server database (design section 7.12).
+
+The console has no login and records no names (design "Admin console without login",
+2026-10-19); forged and cross-site writes are still refused.
+"""
 
 from __future__ import annotations
 
 import os
 import re
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import httpx
 import pytest
 from alerts_bi_admin.app import build_admin
+from alerts_bi_admin.auth import csrf_token
 from alerts_bi_admin.config import AdminConfig, AdminSettings
 from alerts_bi_admin.engine.config import load_config
 from alerts_bi_admin.engine.db.migrate import reset_test_database
 from alerts_bi_admin.engine.db.repositories import PersistencePayload, persist_run
+from alerts_bi_admin.pages import finding_key
 from alerts_bi_portal.app import build_portal
 from alerts_bi_portal.config import PortalSettings
 from alerts_bi_shared.db.connection import connect
@@ -31,6 +37,7 @@ WEEK = timedelta(hours=168)
 W2 = datetime(2026, 8, 24)
 W1 = W2 - WEEK
 RUN1, RUN2 = "1" * 64, "2" * 64
+#: An identity header a former login proxy would have sent; the console must ignore it.
 ALICE = {"X-Forwarded-User": "alice"}
 SECRET = "s" * 40
 
@@ -160,8 +167,8 @@ def _get(client: TestClient, url: str, *, headers: dict[str, str] | None = None)
     return cast(httpx.Response, client.get(url, headers=headers, follow_redirects=True))
 
 
-def token(client: TestClient, headers: dict[str, str] = ALICE) -> str:
-    page = _get(client, f"/teams/{TEAM}", headers=headers).text
+def token(client: TestClient) -> str:
+    page = _get(client, f"/teams/{TEAM}").text
     found = re.search(r'name="csrf" value="([0-9a-f]+)"', page)
     assert found, "the team page carries a form token"
     return found.group(1)
@@ -185,71 +192,64 @@ def portal_week(tab: str = "") -> httpx.Response:
 # ------------------------------------------------------------------ who may do what
 
 
-def test_nobody_gets_in_without_the_login_proxys_identity(client: TestClient) -> None:
-    assert _get(client, "/").status_code == 401
-    assert client.post(f"/runs/{RUN1}/publish").status_code == 401
+def test_the_console_needs_no_login(client: TestClient) -> None:
+    assert _get(client, "/").status_code == 200
+    assert client.post(f"/runs/{RUN1}/publish").status_code == 403, "a token is still required"
 
 
-def test_the_signed_in_operator_sees_every_team_and_run(client: TestClient) -> None:
-    home = _get(client, "/", headers=ALICE)
-    assert home.status_code == 200 and "Signed in as alice" in home.text
+def test_anyone_sees_every_team_and_run_and_no_name(client: TestClient) -> None:
+    home = _get(client, "/")
+    assert home.status_code == 200 and "Signed in" not in home.text
     assert "Checkout API" in home.text
-    team = _get(client, f"/teams/{TEAM}", headers=ALICE).text
+    team = _get(client, f"/teams/{TEAM}").text
     assert RUN1[:16] in team and RUN2[:16] in team and "Unpublished" in team
 
 
 def test_a_write_without_a_valid_token_is_refused(client: TestClient) -> None:
-    assert client.post(f"/runs/{RUN1}/publish", headers=ALICE, data={}).status_code == 403
-    assert (
-        client.post(f"/runs/{RUN1}/publish", headers=ALICE, data={"csrf": "0" * 64}).status_code
-        == 403
-    )
+    assert client.post(f"/runs/{RUN1}/publish", data={}).status_code == 403
+    assert client.post(f"/runs/{RUN1}/publish", data={"csrf": "0" * 64}).status_code == 403
     assert publications() == []
 
 
-def test_another_operators_token_does_not_work(client: TestClient) -> None:
-    bobs = token(client, {"X-Forwarded-User": "bob"})
-    response = client.post(f"/runs/{RUN1}/publish", headers=ALICE, data={"csrf": bobs})
+def test_a_token_signed_with_another_secret_does_not_work(client: TestClient) -> None:
+    forged = csrf_token("f" * 40, datetime.now(UTC).date())
+    response = client.post(f"/runs/{RUN1}/publish", data={"csrf": forged})
     assert response.status_code == 403
 
 
 def test_a_cross_site_form_is_refused_even_with_a_token(client: TestClient) -> None:
     response = client.post(
         f"/runs/{RUN1}/publish",
-        headers={**ALICE, "Sec-Fetch-Site": "cross-site"},
+        headers={"Sec-Fetch-Site": "cross-site"},
         data={"csrf": token(client)},
     )
     assert response.status_code == 403
 
 
 def test_other_methods_are_refused(client: TestClient) -> None:
-    assert client.put("/", headers=ALICE).status_code == 405
-    assert client.delete(f"/runs/{RUN1}/publish", headers=ALICE).status_code == 405
+    assert client.put("/").status_code == 405
+    assert client.delete(f"/runs/{RUN1}/publish").status_code == 405
 
 
 # ------------------------------------------------------------------ the operator's actions
 
 
-def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
-    client: TestClient,
-) -> None:
+def test_publishing_withdrawing_and_deciding_record_no_names(client: TestClient) -> None:
     assert portal_week().status_code == 404
     csrf = token(client)
-    first = client.post(
-        f"/runs/{RUN1}/publish", headers=ALICE, data={"csrf": csrf, "note": "First week"}
-    )
+    first = client.post(f"/runs/{RUN1}/publish", data={"csrf": csrf, "note": "First week"})
     assert first.status_code == 303 and "Published" in first.headers["location"]
+    # An identity header is ignored: nothing is recorded under it.
     second = client.post(f"/runs/{RUN2}/publish", headers=ALICE, data={"csrf": csrf})
     assert second.status_code == 303
-    assert [row["published_by"] for row in publications()] == ["alice", "alice"]
+    assert [row["published_by"] for row in publications()] == ["", ""]
     assert portal_week().status_code == 200
 
-    refused = client.post(f"/runs/{RUN2}/publish", headers=ALICE, data={"csrf": csrf})
+    refused = client.post(f"/runs/{RUN2}/publish", data={"csrf": csrf})
     assert "error=" in refused.headers["location"], "a refusal is shown, not raised"
 
     decided = client.post(
         f"/runs/{RUN2}/decide",
-        headers=ALICE,
         data={
             "csrf": csrf,
             "schema": "v1",
@@ -263,7 +263,6 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     assert decided.status_code == 303 and "done=" in decided.headers["location"]
     wrong = client.post(
         f"/runs/{RUN2}/decide",
-        headers=ALICE,
         data={
             "csrf": csrf,
             "schema": "v1",
@@ -277,8 +276,17 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
     assert "error=" in wrong.headers["location"]
     with connect(CONFIG.sql, DB) as db:
         decisions = db.query("SELECT finding_id, decided_by FROM finding_decisions")
-    assert decisions == [{"finding_id": "R1", "decided_by": "alice"}]
-    findings = _get(client, f"/runs/{RUN2}/findings", headers=ALICE).text
+    assert decisions == [{"finding_id": "R1", "decided_by": ""}]
+    # The redesigned console shows a decision's note on the finding's own page.
+    key = finding_key(
+        {
+            "alert_schema": "v1",
+            "application": "checkout-api",
+            "key_field": "checkout-api:cart:node-1",
+        },
+        "R1",
+    )
+    findings = _get(client, f"/runs/{RUN2}/findings?finding={key}").text
     assert "Agreed with the team" in findings
     assert (
         "Agreed with the team"
@@ -287,45 +295,42 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
         ).text
     )
 
-    withdrawn = client.post(
-        f"/runs/{RUN2}/withdraw", headers=ALICE, data={"csrf": csrf, "reason": "Wrong week"}
-    )
+    withdrawn = client.post(f"/runs/{RUN2}/withdraw", data={"csrf": csrf, "reason": "Wrong week"})
     assert withdrawn.status_code == 303
     last = publications()[-1]
-    assert last["withdrawn_by"] == "alice" and last["withdrawn_reason"] == "Wrong week"
+    # ck_review_publications_withdrawn keeps withdrawn_by non-NULL; it names nobody.
+    assert last["withdrawn_by"] == "" and last["withdrawn_reason"] == "Wrong week"
     assert portal_week().status_code == 404
 
 
 def test_standalone_html_outputs_are_removed(client: TestClient) -> None:
-    assert _get(client, f"/runs/{RUN1}", headers=ALICE).status_code == 404
+    assert _get(client, f"/runs/{RUN1}").status_code == 404
     for suffix in ("scorecard", "scorecard.html"):
-        assert _get(client, f"/runs/{RUN1}/{suffix}", headers=ALICE).status_code == 422
+        assert _get(client, f"/runs/{RUN1}/{suffix}").status_code == 422
     for name in ("daily_metrics.csv", "rule_counts.csv", "alert_worklist.csv"):
-        response = _get(client, f"/runs/{RUN1}/{name}", headers=ALICE)
+        response = _get(client, f"/runs/{RUN1}/{name}")
         assert response.status_code == 200
         assert "attachment" in response.headers["content-disposition"]
 
 
 def test_an_unknown_run_is_not_found(client: TestClient) -> None:
-    assert _get(client, "/runs/nope/daily_metrics.csv", headers=ALICE).status_code == 404
+    assert _get(client, "/runs/nope/daily_metrics.csv").status_code == 404
 
 
 # ------------------------------------------------------------------ the Summary page
 
 
-def test_the_summary_needs_the_login_proxys_identity(client: TestClient) -> None:
+def test_the_summary_needs_no_login(client: TestClient) -> None:
     response = _get(client, f"/teams/{TEAM}/summary")
-    assert response.status_code == 401
+    assert response.status_code == 200
     assert "content-security-policy" in response.headers
 
 
-def test_the_summary_of_a_persisted_run_renders_for_the_signed_in_operator(
-    client: TestClient,
-) -> None:
-    response = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE)
+def test_the_summary_of_a_persisted_run_renders(client: TestClient) -> None:
+    response = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}")
     assert response.status_code == 200
     page = response.text
-    assert "Signed in as alice" in page
+    assert "Signed in" not in page
     assert "script-src 'self'" in response.headers["content-security-policy"]
     assert '<script src="/assets/' in page and " style=" not in page
     assert "Something went wrong &lt;b&gt;now&lt;/b&gt;" in page
@@ -337,7 +342,7 @@ def test_the_summary_of_a_persisted_run_renders_for_the_signed_in_operator(
 
 
 def test_the_workspace_defaults_to_the_latest_run_including_failures(client: TestClient) -> None:
-    page = _get(client, f"/teams/{TEAM}/summary", headers=ALICE).text
+    page = _get(client, f"/teams/{TEAM}/summary").text
     selected = page[page.index('id="selected-run"') :]
     assert FAILED in selected and "Elasticsearch unreachable" in selected
     assert "Only completed runs can be published" in selected
@@ -351,7 +356,7 @@ def test_the_summary_of_a_published_week_reads_its_published_history(client: Tes
             {"team": TEAM},
         )
     assert published is not None, "the publishing test above left a week published"
-    page = _get(client, f"/teams/{TEAM}/summary?run_id={published['run_id']}", headers=ALICE)
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={published['run_id']}")
     assert page.status_code == 200 and "Published</span>" in page.text
     assert "This week is not published" not in page.text
     assert "none was published before this week" in page.text, (
@@ -360,7 +365,7 @@ def test_the_summary_of_a_published_week_reads_its_published_history(client: Tes
 
 
 def test_the_admin_summary_renders_the_shared_widgets(client: TestClient) -> None:
-    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}").text
     for title in ("Why alerts were flagged", "How often alerts fire", "Migration progress"):
         assert title in page
     assert "per day" in page, "the admin surface shows per-day rates"
@@ -370,7 +375,7 @@ def test_the_admin_summary_renders_the_shared_widgets(client: TestClient) -> Non
 
 
 def test_the_admin_summary_ends_with_two_presentation_slides(client: TestClient) -> None:
-    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}", headers=ALICE).text
+    page = _get(client, f"/teams/{TEAM}/summary?run_id={RUN0}").text
     slides = page[page.index(">Presentation</h3>") : page.index('id="days"')]
     assert slides.count('<section class="slide ') == 2
     assert "stands</h4>" in slides and "The week, day by day</h4>" in slides
@@ -385,19 +390,19 @@ def test_the_admin_summary_ends_with_two_presentation_slides(client: TestClient)
 
 def test_the_work_list_sorts_by_events_or_application(client: TestClient) -> None:
     base = f"/teams/{TEAM}/summary?run_id={RUN0}&schema=v1"
-    by_app = _get(client, base + "&sort=application", headers=ALICE).text
+    by_app = _get(client, base + "&sort=application").text
     assert '<option value="application" selected>' in by_app
-    assert _get(client, base + "&sort=bogus", headers=ALICE).status_code == 422
+    assert _get(client, base + "&sort=bogus").status_code == 422
 
 
 def test_an_unknown_run_or_another_teams_run_is_not_found(client: TestClient) -> None:
-    assert _get(client, f"/teams/{TEAM}/summary?run_id=nope", headers=ALICE).status_code == 404
-    assert _get(client, f"/teams/{TEAM}/summary?run_id={OTHER}", headers=ALICE).status_code == 404
-    assert _get(client, "/teams/no-such-team/summary", headers=ALICE).status_code == 404
+    assert _get(client, f"/teams/{TEAM}/summary?run_id=nope").status_code == 404
+    assert _get(client, f"/teams/{TEAM}/summary?run_id={OTHER}").status_code == 404
+    assert _get(client, "/teams/no-such-team/summary").status_code == 404
 
 
 def test_a_failed_run_is_visible_with_retry_and_no_publication(client: TestClient) -> None:
-    response = _get(client, f"/teams/{TEAM}/summary?run_id={FAILED}", headers=ALICE)
+    response = _get(client, f"/teams/{TEAM}/summary?run_id={FAILED}")
     assert response.status_code == 200
     assert "Retry run" in response.text and "Elasticsearch unreachable" in response.text
     assert f'action="/runs/{FAILED}/publish"' not in response.text
@@ -405,25 +410,25 @@ def test_a_failed_run_is_visible_with_retry_and_no_publication(client: TestClien
 
 def test_the_work_list_filters_by_state_schema_and_rule(client: TestClient) -> None:
     base = f"/teams/{TEAM}/summary?run_id={RUN0}"
-    everything = _get(client, base, headers=ALICE).text
+    everything = _get(client, base).text
     assert "Showing 1&ndash;4 of 4" in everything
-    flagged = _get(client, base + "&state=rule_flagged&rule=R1", headers=ALICE).text
+    flagged = _get(client, base + "&state=rule_flagged&rule=R1").text
     assert "Showing 1&ndash;1 of 1" in flagged
     worklist = flagged[flagged.index('id="worklist"') :]
     assert "Something went wrong" in worklist and "Disk full" not in worklist
-    v2 = _get(client, base + "&schema=v2", headers=ALICE).text
+    v2 = _get(client, base + "&schema=v2").text
     assert "Showing 1&ndash;1 of 1" in v2 and "Payment errors" in v2
     assert "/findings" in v2, "each row links to the findings and decisions page"
     for bad in ("&state=bogus", "&schema=v3", "&rule=R11", "&rule=P1"):
-        assert _get(client, base + bad, headers=ALICE).status_code == 422
+        assert _get(client, base + bad).status_code == 422
 
 
 def test_the_summary_is_read_only(client: TestClient) -> None:
-    assert client.post(f"/teams/{TEAM}/summary", headers=ALICE).status_code == 405
-    assert client.put(f"/teams/{TEAM}/summary", headers=ALICE).status_code == 405
+    assert client.post(f"/teams/{TEAM}/summary").status_code == 405
+    assert client.put(f"/teams/{TEAM}/summary").status_code == 405
 
 
 def test_the_dashboard_and_run_history_link_to_the_team_workspace(client: TestClient) -> None:
-    assert f'href="/teams/{TEAM}?tab=overview"' in _get(client, "/", headers=ALICE).text
-    team = _get(client, f"/teams/{TEAM}", headers=ALICE).text
+    assert f'href="/teams/{TEAM}?tab=overview"' in _get(client, "/").text
+    team = _get(client, f"/teams/{TEAM}").text
     assert f"run_id={RUN0}" in team

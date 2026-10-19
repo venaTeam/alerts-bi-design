@@ -328,7 +328,6 @@ def reader() -> SqlConfig:
             finding_id="R1",
             state="pending",
             note="Raised in the review meeting.",
-            decided_by="operator",
             now=W3 + timedelta(days=1),
         )
         record_decision(
@@ -340,7 +339,6 @@ def reader() -> SqlConfig:
             finding_id="R1",
             state="confirmed",
             note="Team agreed to rewrite it.",
-            decided_by="operator",
             now=W3 + timedelta(days=2),
         )
         record_decision(
@@ -352,7 +350,6 @@ def reader() -> SqlConfig:
             finding_id="R9",
             state="confirmed",
             note="Runbook is being written.",
-            decided_by="operator",
         )
 
     login = "alerts_bi_portal_test"
@@ -533,9 +530,9 @@ def test_publishing_replacing_and_withdrawing_one_teams_weeks() -> None:
         )
         assert withdrawn is not None and "replaced by run" in str(withdrawn["withdrawn_reason"])
 
-        unpublish_run(db, _run_id("p1"), withdrawn_by="op", reason="published in error")
+        unpublish_run(db, _run_id("p1"), reason="published in error")
         with pytest.raises(PublicationRefused, match="not currently published"):
-            unpublish_run(db, _run_id("p1"), withdrawn_by="op", reason="again")
+            unpublish_run(db, _run_id("p1"), reason="again")
 
         # Once withdrawn, the run may be re-persisted again: its audit row survives.
         _store("p1", OTHER, W1)
@@ -576,7 +573,6 @@ def test_a_decision_must_name_a_finding_the_alert_actually_has() -> None:
             finding_id="R2",
             state="confirmed",
             note="x",
-            decided_by="op",
         )
 
 
@@ -594,7 +590,6 @@ def test_a_decision_is_only_made_on_a_published_week() -> None:
             finding_id="R1",
             state="confirmed",
             note="x",
-            decided_by="op",
         )
 
 

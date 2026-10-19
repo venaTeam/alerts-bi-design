@@ -34,9 +34,22 @@ The first browser withdrawal failed with HTTP 500: `ck_review_publications_withd
 `withdrawn_by` on a withdrawn row, and the change first wrote NULL. Withdrawals and migration 018
 now store `''`; the migration's integration test expects it.
 
+## Review follow-up (PR review and CI)
+
+- Admin CI's integration job failed two console tests that still expected "alice" in the decision
+  history and activity (the second only because the first stopped before its cleanup). Fixed in
+  admin; locally `pytest tests/integration tests/engine/integration tests/engine/acceptance` then
+  passed 207 with none skipped on `alerts_bi_test`, including `test_migration_018_upgrade.py`.
+- This repository's coordinated tests still passed operator names to operations 0.2.7 and expected
+  401s, user-bound tokens and stored names. They now expect no login and no names, and keep the
+  missing-token, forged-token and cross-site refusals. `scripts/run_integration.py` with the admin
+  registry, admin and portal of this change installed and local SQL: 80 passed, 2 failed. The two
+  failures (`test_the_workspace_defaults_to_the_latest_run_including_failures` and
+  `test_a_failed_run_is_visible_with_retry_and_no_publication`) also fail with the original tests
+  against the base revisions (4 failed there); they come from the 2026-10-19 console redesign, not
+  from this change. The decision test now opens the finding's own page, where the redesigned
+  console shows a decision's note.
+
 ## Not executed
 
-- The SQL integration and acceptance suites, including the new
-  `tests/engine/integration/test_migration_018_upgrade.py`, did not run locally because
-  `alerts_bi_test` was in use; the admin CI integration job runs them.
 - No `oc`, cluster or deployment. On a real database 018 is irreversible without the pre-018 backup.

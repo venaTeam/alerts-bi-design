@@ -87,7 +87,6 @@ def portal() -> Iterator[TestClient]:
                 finding_id="R1",
                 state="confirmed",
                 note=f"Decision for {application}",
-                decided_by="operator",
             )
     settings = PortalSettings(sql=CONFIG.sql, database=DB, page_size=10)
     with TestClient(build_portal(settings), client=LOCAL) as client:
