@@ -57,6 +57,17 @@ stopped job and backfill polling. The same commit also:
 It also fixes an existing time-zone flake in `test_team_identity`, which took "this Monday" from
 local time.
 
+## PR review fix
+
+The review of admin #16 at f65065b found that the shared New runs dialog kept an earlier
+selection: after opening it from the header, changing weeks and cancelling, "Run this week
+again" would start the other week. Admin b7c21be resets the week list on every open (the retry
+and Run it openers check only their week; other openers restore the default) and replaces the
+retry with an explanation when the failed week can no longer run. Checks on b7c21be: ruff,
+format, mypy and 1023 unit tests passed; integration tests for console, run jobs and backfill
+passed (69); the cancel-and-reopen journey was repeated in the browser with a failed scratch
+week. The design inputs are unchanged, so the snapshot stays pinned to fc80122.
+
 ## Not verified
 
 - A live model path (local runs used the fake model).
