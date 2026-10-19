@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import html
 import os
 import re
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import httpx
@@ -61,6 +62,11 @@ def _store(run_id: str, end: datetime) -> None:
 #: another team, for the Summary page.
 RUN0, OTHER, FAILED = "0" * 64, "9" * 64, "f" * 64
 W0 = W1 - WEEK
+#: The failed run's week ends one week before the latest complete week, so it is the team's
+#: newest run and stays inside the 84-day Elasticsearch retention whenever the suite runs: the
+#: console offers to run a failed week again only while that week can still run.
+_TODAY = datetime.now(UTC).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+FAILED_END = _TODAY - timedelta(days=_TODAY.weekday()) - WEEK
 
 
 def _store_summary_runs() -> None:
@@ -120,9 +126,9 @@ def _store_summary_runs() -> None:
     failed = PersistencePayload(
         run=sample_run(
             run_id=FAILED,
-            run_at=W2 + WEEK,
-            window_start=W2,
-            window_end=W2 + WEEK,
+            run_at=FAILED_END,
+            window_start=FAILED_END - WEEK,
+            window_end=FAILED_END,
             status="failed",
             completed_at=None,
             error_summary="Elasticsearch unreachable",
@@ -279,7 +285,13 @@ def test_publishing_withdrawing_and_deciding_are_recorded_under_the_operator(
         decisions = db.query("SELECT finding_id, decided_by FROM finding_decisions")
     assert decisions == [{"finding_id": "R1", "decided_by": "alice"}]
     findings = _get(client, f"/runs/{RUN2}/findings", headers=ALICE).text
-    assert "Agreed with the team" in findings
+    listed = findings[findings.index('id="findings-title"') :]
+    assert ">Confirmed</span>" in listed, "the published week lists each finding's decision"
+    link = re.search(r'href="([^"]*finding=[0-9a-f]{24}[^"]*)"', listed)
+    assert link, "each finding opens its own page"
+    finding = _get(client, html.unescape(link.group(1)), headers=ALICE).text
+    decision = finding[finding.index('id="decision-title"') :]
+    assert ">Confirmed</span>" in decision and "Agreed with the team" in decision
     assert (
         "Agreed with the team"
         in portal_week(
@@ -338,9 +350,12 @@ def test_the_summary_of_a_persisted_run_renders_for_the_signed_in_operator(
 
 def test_the_workspace_defaults_to_the_latest_run_including_failures(client: TestClient) -> None:
     page = _get(client, f"/teams/{TEAM}/summary", headers=ALICE).text
-    selected = page[page.index('id="selected-run"') :]
-    assert FAILED in selected and "Elasticsearch unreachable" in selected
-    assert "Only completed runs can be published" in selected
+    current = re.search(r'<a href="([^"]*)" aria-current="true">', page)
+    assert current and f"run_id={FAILED}" in current.group(1), "the week picker marks it"
+    step = page[page.index('id="step-title"') : page.index('id="run-details"')]
+    assert "Elasticsearch unreachable" in step
+    assert "Only completed runs can be published" in step
+    assert FAILED in page[page.index('id="run-details"') :], "its run details are shown"
 
 
 def test_the_summary_of_a_published_week_reads_its_published_history(client: TestClient) -> None:
@@ -352,7 +367,7 @@ def test_the_summary_of_a_published_week_reads_its_published_history(client: Tes
         )
     assert published is not None, "the publishing test above left a week published"
     page = _get(client, f"/teams/{TEAM}/summary?run_id={published['run_id']}", headers=ALICE)
-    assert page.status_code == 200 and "Published</span>" in page.text
+    assert page.status_code == 200 and "In the portal since" in page.text, "shown as published"
     assert "This week is not published" not in page.text
     assert "none was published before this week" in page.text, (
         "one published week: no earlier week to measure a pace from"
@@ -399,8 +414,13 @@ def test_an_unknown_run_or_another_teams_run_is_not_found(client: TestClient) ->
 def test_a_failed_run_is_visible_with_retry_and_no_publication(client: TestClient) -> None:
     response = _get(client, f"/teams/{TEAM}/summary?run_id={FAILED}", headers=ALICE)
     assert response.status_code == 200
-    assert "Retry run" in response.text and "Elasticsearch unreachable" in response.text
-    assert f'action="/runs/{FAILED}/publish"' not in response.text
+    page = response.text
+    step = page[page.index('id="step-title"') : page.index('id="run-details"')]
+    week = f"{FAILED_END:%Y-%m-%d}"
+    assert "Elasticsearch unreachable" in step
+    assert f'data-week="{week}">Run this week again</button>' in step
+    assert f'name="week" value="{week}" checked>' in page, "New runs opens on the failed week"
+    assert f'action="/runs/{FAILED}/publish"' not in page
 
 
 def test_the_work_list_filters_by_state_schema_and_rule(client: TestClient) -> None:
