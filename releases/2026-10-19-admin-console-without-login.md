@@ -71,6 +71,16 @@ and `contracts/migrations.json` lists both with source commit admin a0405ec. Ent
 were written before the renumbering call the erasure 018. The design text, decision 007 and the
 runbooks now say 019, and the deployment requirements list 015 to 019 in the migration gate.
 
+Admin a0405ec (merge), 8da9748 (snapshot) and f9dc3b1, and portal d7efc76, are pinned to design
+3d65ae3. Checks: admin `pytest tests/unit tests/engine/unit` 1050 passed, `ruff check`, `ruff
+format --check` and `mypy` passed, and `scripts/check_contracts.py --console` matched; portal
+`pytest tests/unit` 428 passed with `ruff` and `mypy` clean. On `alerts_bi_test` the 015, 016,
+018 and 019 upgrade tests, `test_migrations.py`, `test_team_identity.py` and
+`test_deployment_migrations.py` passed (28). The full admin integration suite also failed 16
+Elasticsearch-backed tests locally, all reading no rows: since admin #18 the reader filters on
+`operator.keyword`, and the shared local mock still maps `operator` as a plain keyword. The same
+16 fail locally on the runbook branch, whose CI passes.
+
 ## Not executed
 
 - No `oc`, cluster or deployment. On a real database 019 is irreversible without the pre-019 backup.
