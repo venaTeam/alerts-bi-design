@@ -318,7 +318,7 @@ def reader() -> SqlConfig:
     _store("unpub", TEAM, W3 + WEEK, rich=True)
     with connect(CONFIG.sql, DB) as db:
         for name, note in (("wk1", None), ("wk2", None), ("wk3", "Heartbeats are still hidden.")):
-            publish_run(db, _run_id(name), published_by="operator", note=note)
+            publish_run(db, _run_id(name), note=note)
         record_decision(
             db,
             run_id=_run_id("wk3"),
@@ -491,7 +491,7 @@ def test_the_views_do_not_expose_the_complete_source_document(reader: SqlConfig)
 
 def test_an_overlapping_run_is_never_published() -> None:
     with connect(CONFIG.sql, DB) as db, pytest.raises(PublicationRefused, match="overlaps"):
-        publish_run(db, _run_id("overlap"), published_by="operator", allow_gap=True)
+        publish_run(db, _run_id("overlap"), allow_gap=True)
 
 
 def test_a_published_run_cannot_be_re_persisted_underneath_its_readers() -> None:
@@ -506,14 +506,14 @@ def test_publishing_replacing_and_withdrawing_one_teams_weeks() -> None:
         _store(name, OTHER, end)
 
     with connect(CONFIG.sql, DB) as db:
-        publish_run(db, _run_id("p1"), published_by="op")
+        publish_run(db, _run_id("p1"))
         with pytest.raises(PublicationRefused, match="gap"):
-            publish_run(db, _run_id("p3"), published_by="op")
-        publish_run(db, _run_id("p3"), published_by="op", allow_gap=True)
+            publish_run(db, _run_id("p3"))
+        publish_run(db, _run_id("p3"), allow_gap=True)
 
         with pytest.raises(PublicationRefused, match="--replace"):
-            publish_run(db, _run_id("p3b"), published_by="op", allow_gap=True)
-        result = publish_run(db, _run_id("p3b"), published_by="op", replace=True)
+            publish_run(db, _run_id("p3b"), allow_gap=True)
+        result = publish_run(db, _run_id("p3b"), replace=True)
         assert result.replaced_run_id == _run_id("p3")
 
         current = {
@@ -1010,7 +1010,7 @@ def test_the_estimate_is_drawn_from_published_weeks_only(portal: TestClient) -> 
     _pace_run("pace-shadow", W2 - timedelta(hours=49), "wxyz")
     with connect(CONFIG.sql, DB) as db:
         for name in PACE_WEEKS:
-            publish_run(db, _run_id(name), published_by="operator")
+            publish_run(db, _run_id(name))
 
     with connect(CONFIG.sql, DB) as db:
         latest = summarize(load_portal_summary(db, PACE_TEAM, _run_id("pace4")))
@@ -1118,7 +1118,7 @@ def test_the_view_and_the_operator_app_agree_on_when_measurement_changed(
                     findings=[sample_finding(run_id=_run_id(name), key_field=f"{name}:k")],
                 ),
             )
-            publish_run(db, _run_id(name), published_by="operator")
+            publish_run(db, _run_id(name))
 
         view = db.query(
             "SELECT basis_changed FROM portal_reviews WHERE team_id = :t ORDER BY window_end",
@@ -1274,7 +1274,7 @@ def test_portal_totals_equal_what_the_pipeline_stored_and_exported(reader: SqlCo
             db=db,
         )
         persist_run(db, payload)
-        publish_run(db, summary.run_id, published_by="operator")
+        publish_run(db, summary.run_id)
         outputs = build_run_outputs(db, summary.run_id)
         stored_events = {
             str(row["alert_schema"]): int(row["events"])

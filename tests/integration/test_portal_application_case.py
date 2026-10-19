@@ -76,7 +76,7 @@ def portal() -> Iterator[TestClient]:
     )
     with connect(CONFIG.sql, DB) as db:
         persist_run(db, payload)
-        publish_run(db, RUN_ID, published_by="operator", allow_gap=True)
+        publish_run(db, RUN_ID, allow_gap=True)
         for application in ("Moby", "moby"):
             record_decision(
                 db,

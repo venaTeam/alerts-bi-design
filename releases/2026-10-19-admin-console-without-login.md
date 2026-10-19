@@ -49,6 +49,18 @@ now store `''`; the migration's integration test expects it.
   against the base revisions (4 failed there); they come from the 2026-10-19 console redesign, not
   from this change. The decision test now opens the finding's own page, where the redesigned
   console shows a decision's note.
+- Second PR review (admin cf02ff8), fixed in admin 185b4f1. `publish_run` still stored any
+  `published_by` it was given; it now accepts only "" or the scheduler's `weekly-schedule` and
+  refuses anything else, and this repository's coordinated tests no longer pass a name. Job and
+  backfill retries looked only at `requested_by = ''`, so a retry with a key that 018 had kept
+  apart as `#<id>` stored a second submission; a retry now matches the key across every
+  requester value, returns the one row with its own options, and is refused with 409 when two
+  rows still match. The runbook's rollback to the login-proxy release now sets a new
+  `COOKIE_SECRET`, which 7.6 removed and 7.1 does not export. Admin: unit 1046 passed, `ruff`,
+  `ruff format --check` and `mypy` passed, and `pytest tests/integration tests/engine/integration
+  tests/engine/acceptance` passed 207 with none skipped on `alerts_bi_test`, its 018 upgrade test
+  now checking retries on migrated keys. Coordinated tests here: 80 passed and the same 2 failed
+  as above.
 
 ## Not executed
 
