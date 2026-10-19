@@ -61,6 +61,12 @@ now store `''`; the migration's integration test expects it.
   tests/engine/acceptance` passed 207 with none skipped on `alerts_bi_test`, its 018 upgrade test
   now checking retries on migrated keys. Coordinated tests here: 80 passed and the same 2 failed
   as above.
+- Third PR review (design 8b67d12): README's "Reproducing the team-identity integration check"
+  still installed operations 0.2.6 and built the 2026-10-18 apps, so `test_team_routes.py` stopped
+  with `TypeError`. It now names operations 0.2.7 and this record's revisions, and points earlier
+  reproductions to their own design revision. With this change's admin, portal and operations
+  0.2.7 installed and `REQUIRE_SQL=1`, `pytest tests/integration/test_team_routes.py -q -rs` passed
+  (1, no skips) and `check_contracts.py --console --sql` matched.
 
 ## Renumbered after main's migration 018
 
