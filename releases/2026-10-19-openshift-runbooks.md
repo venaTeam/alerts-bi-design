@@ -54,3 +54,20 @@ The review also found that the proxy check (`get` on the `alerts-bi-admin` Servi
 holders of the built-in `view`, `edit` and `admin` roles, not only the operator Group. This is
 the existing access model; the documents now state it, and changing it is left to the product
 owner.
+
+## PR review follow-up
+
+- admin a86fdb6: the drain check's `python -c` snippet queried after its connection had closed;
+  it now keeps the connection open, and `test_the_drain_check_queries_while_its_connection_is_open`
+  runs the snippet against a fake connection that refuses queries once closed. Upgrades diff and
+  prune both the ConfigMap and the Secret, a new release suspends and drains the scheduler first,
+  and a troubleshooting row covers the refused Route `spec.host` change.
+- portal 44890ce: taking over the old host recreates the Route instead of changing `spec.host`,
+  which the `edit` and `admin` roles may not do.
+- admin 0901270: `config.env.example` said that with the model off weekly weeks are never
+  published, but the scheduler publishes a held week, with a reader note, three days after it
+  first held it (design 7.11). The example, the values table and section 9 now say so and keep the
+  scheduler suspended when unassessed weeks must not be published.
+- Each commit message lists its checks. For 0901270, `pytest tests/unit/test_openshift_deploy.py`
+  passed (9) and the local `oc process` stand-in rendered both Templates with its structural
+  checks passing.
