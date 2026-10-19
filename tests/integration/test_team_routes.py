@@ -62,7 +62,7 @@ def test_portal_routes_preserve_slash_percent_dot_and_case_identity() -> None:
                     findings=[sample_finding(run_id=run_id, message=f"Distinct message {n}")],
                 ),
             )
-            publish_run(db, run_id, published_by="route-test", allow_gap=True)
+            publish_run(db, run_id, allow_gap=True)
     settings = PortalSettings(config.sql, database)
     with TestClient(build_portal(settings), client=("127.0.0.1", 50000)) as client:
         home = client.get("/")

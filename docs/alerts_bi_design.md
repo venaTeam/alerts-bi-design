@@ -1,5 +1,64 @@
 # Alerts BI — Design Document
 
+## Admin console without login — accepted 2026-10-19
+
+The product owner decided on 2026-10-19 to remove the login to the admin console entirely and
+to keep no record of who did what. This supersedes every earlier statement that console or API
+routes require the login proxy's identity, that the listener must bind to loopback, that forms
+carry actor-bound tokens, that actions are recorded under the signed-in person, and that the
+proxy admits only the standardization team (sections "Accepted consolidation", 7.12 and the
+backfill, async-runs and outputs contracts).
+
+* **Access.** No login proxy, OAuth client, access Role or client allowlist. The Route uses edge
+  TLS and the console listens on the pod address (`ADMIN_HOST=0.0.0.0`). Anyone who has the URL
+  and can reach the cluster's router may use every function, including Delete run; the product
+  owner keeps the URL within the operating team. No route returns 401.
+* **Forgery protection stays.** Every POST still needs a CSRF token, now an HMAC of the UTC day
+  under `ADMIN_SECRET`, and same-site requests; JSON clients still take it from `GET /csrf`.
+* **No names.** Runs, backfills, publications, withdrawals, decisions and cancellations record no
+  person. Name columns store `''` (a withdrawn week's `withdrawn_by` too, which a CHECK keeps
+  non-NULL), the optional backfill canceller is NULL, and run messages name nobody
+  ("Cancelled before it started."). The weekly scheduler still marks its own publications
+  `weekly-schedule`, which the console shows as "by the weekly schedule". Submission keys are
+  unique across all clients instead of per operator. The CLI drops `--by`, `serve` drops
+  `--dev-user`, and logs carry no operator field. Operations 0.2.7 publishes the library change;
+  the portal keeps the `portal_decisions.decided_by` column (always `''`) and no longer shows it.
+* **Erasure.** Migration `019_erase_operator_names`, which follows `018_alert_identity_hash`,
+  blanks every name already stored, keeping the `weekly-schedule` marker. Decisions stay
+  append-only: the migration disables their trigger only around its one UPDATE. Where two
+  people had used the same submission key, the rows keep apart as `#<row id>`. The revision
+  refuses downgrade, readiness requires it, and only a pre-019 backup holds the erased names,
+  so the migration gate applies.
+
+## Fixed-width alert identity keys — accepted 2026-10-19
+
+On 2026-10-19 a team's run failed to persist with SQL Server error 1946: an entry of 986 bytes
+for `pk_alert_findings` exceeded the 900-byte limit for clustered index entries. That key was
+`(run_id, alert_schema, application, key_field)` and `pk_llm_verdicts` was `(application,
+key_field, prompt_version, model_version)`. Both are clustered and could reach 1,668 and 1,856
+bytes, because `application` is NVARCHAR(256) and `key_field` NVARCHAR(512). SQL Server
+created them with only a warning. Beside a 64-character run id, any identity whose
+`application` and `key_field` together exceeded 384 characters made `persist_run` fail and
+roll back the whole run. The failing identity had 427.
+
+Every identity that fits its columns is stored. Migration `018_alert_identity_hash` adds a
+persisted computed column `identity_hash BINARY(32)` to `alert_findings` and `llm_verdicts`:
+SHA-256 over the byte length of the right-trimmed `application`, the right-trimmed
+`application` and the right-trimmed `key_field`. It rebuilds `pk_alert_findings` as `(run_id,
+alert_schema, identity_hash)` and `pk_llm_verdicts` as `(identity_hash, prompt_version,
+model_version)`, at most 164 and 352 bytes. Right-trimming reproduces SQL Server's
+trailing-space padding under the binary collation, so the new keys accept and reject exactly
+the pairs the old keys did. Identity, verdict reuse, decisions and ordering are unchanged.
+The engine's verdict lookups compute the same expression over their parameters, so they seek
+the key. The column is not exposed through any `portal_*` view. View columns in
+`contracts/sql-views.json`, CSV outputs, console routes and shared/operations interfaces are
+unchanged. Existing rows already satisfy the old keys, so the rebuild cannot conflict. Its
+downgrade is refused.
+
+Not covered: values longer than their columns (`application` over 256 or `key_field` over 512
+UTF-16 code units) still fail the run when stored. That has not been observed and needs a
+separate decision. The trailing-space limitation recorded below is unchanged.
+
 ## Operator console redesign — accepted 2026-10-19
 
 The user reviewed three console mocks on 2026-10-18 and chose the guided-steps layout. On
@@ -12,8 +71,8 @@ Display sections of [the backfill contract](backfill.md). Run execution, the job
 queues, publication, withdrawal, deletion and decision rules are unchanged. So are migrations,
 scoring, prompt text, CSV outputs, portal views and the shared/operations libraries.
 
-* **Navigation.** A left sidebar holds Teams, Schedule, Decisions and the signed-in operator;
-  there is no top bar. On narrow screens the sidebar stacks above the page.
+* **Navigation.** A left sidebar holds Teams, Schedule and Decisions (the signed-in operator it
+  also showed was removed on 2026-10-19 with the login); there is no top bar. On narrow screens the sidebar stacks above the page.
 * **Teams.** One card per registered team shows the team's newest week as Run, Review and
   Publish progress with a one-line status: running or waiting, failed, held, ready to review,
   published, withdrawn or no runs. Teams off the weekly schedule carry a Manual label. Teams
@@ -305,7 +364,7 @@ The approved mock has three workspace navigation items: Teams, Schedule and Deci
 
 New run is scoped to the selected registered team, takes a UTC window end and live/fake/off model mode, and invokes the existing synchronous execution/persistence/reporting path under the existing process gate. Its window is exactly the preceding 168 hours. UI and JSON triggers share the gate. Manual completion does not publish. Existing publish/replace/gap, withdraw-with-reason and published-run decision rules remain authoritative. Actions return to the selected team/run; an explicit cross-team run selection is refused. No migration, scoring, prompt, deterministic identifier or output-content changes are authorized by this consolidation.
 
-All console and API routes require the proxy identity (or an explicitly supplied local `--dev-user`). The listener refuses non-loopback addresses and requires `ADMIN_SECRET` of at least 32 characters. Browser writes use same-site CSRF forms; JSON `POST /runs` requires `X-CSRF-Token` obtained from authenticated `GET /csrf`. No unauthenticated trigger Service remains in the deployment topology. Existing request/response payloads and export routes are retained behind authentication; the old API factory is a compatibility/test harness, not a deployment entry point. Default port is 8200; `ADMIN_*` configuration is retained (`ADMIN_OUT_DIR` was removed on 2026-10-17; runs write no files) with existing `SQL_*`, `ES_*` and `LLM_*` runtime settings. One replica and one worker preserve the existing process-local gate guarantee.
+**Superseded 2026-10-19 by "Admin console without login":** routes need no identity, the listener may bind any address, and the CSRF token is no longer bound to a user. Original text: All console and API routes require the proxy identity (or an explicitly supplied local `--dev-user`). The listener refuses non-loopback addresses and requires `ADMIN_SECRET` of at least 32 characters. Browser writes use same-site CSRF forms; JSON `POST /runs` requires `X-CSRF-Token` obtained from authenticated `GET /csrf`. No unauthenticated trigger Service remains in the deployment topology. Existing request/response payloads and export routes are retained behind authentication; the old API factory is a compatibility/test harness, not a deployment entry point. Default port is 8200; `ADMIN_*` configuration is retained (`ADMIN_OUT_DIR` was removed on 2026-10-17; runs write no files) with existing `SQL_*`, `ES_*` and `LLM_*` runtime settings. One replica and one worker preserve the existing process-local gate guarantee.
 
 The implementation remains server-rendered with a content-addressed stylesheet and a small same-origin script for accessible dialogs, team selection, UTC-window previews and trigger feedback. Empty teams, failed runs, refusal messages, keyboard-accessible forms and narrow viewports are required states. Infrastructure rollout is a separate authorized action; see `unified-console-deployment.md`.
 
@@ -383,7 +442,7 @@ Notes that matter for measurement:
 * `severity` does **not** map 1:1. `warning` maps to `warning` cleanly; `error` and `major` must be re-decided per alert against the Wake-Up Test. There is deliberately **no published mapping** — each team decides per alert using the guide.
 * `impact` and `runbook_url` are optional today and will be made required later. The standard is therefore **not enforced at ingest**, which is precisely why a BI layer is needed.
 * **The v2 `key_field` hash is built from every field *except* `status`, `message`, and the time fields** (confirmed 2026-08-27). Two consequences: the key is stable across 12-hour re-fires and across `firing` -> `resolved`, so `distinct_alerts` is meaningful; but the key *does* change when `severity`, `impact`, or `runbook_url` change — which is exactly what phase 1 and phase 2 ask teams to do. See section 3.7.
-* **Index names and field mappings are exactly as defined in this table and in the mock indices** `appchi-v1` / `appchi-v2` (confirmed 2026-08-27). No renaming to reconcile.
+* **Index names and field mappings are exactly as defined in this table and in the mock indices** `appchi-v1` / `appchi-v2` (confirmed 2026-08-27). No renaming to reconcile. **Amended 2026-10-19 (`operator` mapping):** this was inaccurate for `operator`. In production, both `appchi-v1` and `appchi-v2` map `operator` as analyzed `text` with a `keyword` subfield (`operator.keyword`); it is not a keyword-only field. A `terms` filter on the analyzed `operator` field compares lowercased tokens, so any registry operator containing an uppercase letter (for example `893_Lannister`) matched no rows. Operator matching remains exact and case-sensitive (section 3.1): the engine reader, the scale probe and the Kibana panels filter on `operator.keyword`, never on the analyzed field. The mock generator now mirrors the production mapping (`text` plus a `keyword` subfield), so the mock reproduces this behavior ([alerts-bi-admin PR #18](https://github.com/venaTeam/alerts-bi-admin/pull/18)). Field names are unchanged; only the `operator` mapping and the field that exact filters address are corrected.
 
 ### 1.4 Migration phases
 
@@ -1120,8 +1179,11 @@ Scheduling is otherwise unchanged from the design: the CronJob is the only trigg
 * It shows every registered team, whether it is on the schedule, its latest published week and the schedule's last outcome; every run of a team with its publication state; each run's full scorecard, rendered from SQL; and a published week's findings with their decision history.
 * It lets an operator publish a run (with a note or `replace`), withdraw a published week with a reason, permanently delete a run, and record a decision on a finding. Publication, withdrawal and decisions use the same operations as the command line and follow section 7.10.
 * **Every action is recorded under the signed-in person's identity**, from the login proxy.
+  **Superseded 2026-10-19:** no action records a person; see "Admin console without login".
 
-**Access.** The app has no login of its own. It sits behind OpenShift's `oauth-proxy`, which signs the person in and admits only the standardization team (a SubjectAccessReview that only that group's role satisfies), and passes their name in `X-Forwarded-User`. The app trusts that header, which is safe only because nothing else can reach the app: it binds to loopback and refuses any other address, and the proxy is a sidecar sharing the pod's loopback. Every write is a POST carrying an HMAC token of the user and date under `ADMIN_SECRET`, and a browser-declared cross-site request is refused, so a page elsewhere on the network cannot act through a signed-in operator's browser. It runs with the owning SQL credential, has its own internal-only Route, and is never mounted on the portal or the trigger surface.
+**Access.** **Superseded 2026-10-19 by "Admin console without login":** there is no proxy, no
+access check and no identity; anyone who can reach the Route may use the console. Original
+text: The app has no login of its own. It sits behind OpenShift's `oauth-proxy`, which signs the person in and admits only the standardization team (a SubjectAccessReview that only that group's role satisfies), and passes their name in `X-Forwarded-User`. The app trusts that header, which is safe only because nothing else can reach the app: it binds to loopback and refuses any other address, and the proxy is a sidecar sharing the pod's loopback. Every write is a POST carrying an HMAC token of the user and date under `ADMIN_SECRET`, and a browser-declared cross-site request is refused, so a page elsewhere on the network cannot act through a signed-in operator's browser. It runs with the owning SQL credential, has its own internal-only Route, and is never mounted on the portal or the trigger surface.
 
 No alerting was added: problems surface as failed CronJob runs and on the admin app's team list.
 
@@ -1147,7 +1209,7 @@ remain append-only while their parent run exists. Migration `009_run_deletion` p
 decision cleanup only in the owning connection's explicit whole-run deletion scope;
 a checked parent foreign key rejects orphan inserts, and updates remain forbidden. Deletion
 uses the manual gate, scheduler lock, model-review lock and run-row lock; active work is
-refused. The authenticated actor and run id are logged without alert content.
+refused. The run id is logged without alert content (the actor was dropped on 2026-10-19).
 
 **Concurrency clarified 2026-10-13:** manual HTTP/API runs, manual CLI runs and reports, the weekly
 schedule and deletion share the database's existing `alerts-bi-weekly` SQL session lock.

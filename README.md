@@ -39,13 +39,17 @@ generator and oracle are maintained in admin; no duplicate fixture system lives 
 
 The documentation environment intentionally does not declare application packages as runtime
 dependencies. The coordinated test needs explicitly selected admin and portal release wheels,
-shared 0.1.8 and operations 0.2.6; those packages are not fetched from an assumed public index.
-Build the apps at the revisions recorded in `releases/2026-10-18-relax-team-registry.md` and
-collect their wheels and the producer's shared/operations wheels in a local artifact directory.
+shared 0.1.8 and operations 0.2.7; those packages are not fetched from an assumed public index.
+Build the apps at the revisions recorded in `releases/2026-10-19-admin-console-without-login.md`
+and collect their wheels and the producer's shared/operations wheels in a local artifact
+directory. This repository's tests publish without an operator name, so with operations 0.2.6
+or earlier they fail with `TypeError`. To reproduce an earlier release, check out the design
+revision of its record (for `releases/2026-10-18-relax-team-registry.md`, design 859c87a) and
+follow that README.
 From a clean Python 3.12+ virtual environment, install those exact files and the test tools:
 
 ```powershell
-python -m pip install <artifacts>/alerts_bi_shared-0.1.8-py3-none-any.whl <artifacts>/alerts_bi_operations-0.2.6-py3-none-any.whl <artifacts>/alerts_bi_admin-0.1.0-py3-none-any.whl <artifacts>/alerts_bi_portal-0.1.0-py3-none-any.whl pytest httpx
+python -m pip install <artifacts>/alerts_bi_shared-0.1.8-py3-none-any.whl <artifacts>/alerts_bi_operations-0.2.7-py3-none-any.whl <artifacts>/alerts_bi_admin-0.1.0-py3-none-any.whl <artifacts>/alerts_bi_portal-0.1.0-py3-none-any.whl pytest httpx
 $env:SQL_HOST = '127.0.0.1'
 $env:SQL_TEST_DATABASE = 'alerts_bi_test'
 $env:REQUIRE_SQL = '1'
