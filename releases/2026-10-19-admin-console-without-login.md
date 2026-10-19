@@ -62,6 +62,15 @@ now store `''`; the migration's integration test expects it.
   now checking retries on migrated keys. Coordinated tests here: 80 passed and the same 2 failed
   as above.
 
+## Renumbered after main's migration 018
+
+Admin main gained `018_alert_identity_hash` (admin #20, design 925f482, which the runbook branch
+now carries). The erasure therefore became `019_erase_operator_names`, after it: its SQL bytes are
+unchanged, its revision names `018_alert_identity_hash` as down revision, readiness requires both,
+and `contracts/migrations.json` lists both with source commit admin a0405ec. Entries above that
+were written before the renumbering call the erasure 018. The design text, decision 007 and the
+runbooks now say 019, and the deployment requirements list 015 to 019 in the migration gate.
+
 ## Not executed
 
-- No `oc`, cluster or deployment. On a real database 018 is irreversible without the pre-018 backup.
+- No `oc`, cluster or deployment. On a real database 019 is irreversible without the pre-019 backup.
