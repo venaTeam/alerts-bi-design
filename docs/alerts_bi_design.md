@@ -18,7 +18,8 @@ unchanged except for one addition, below.
   bounded queue (16 MB), a background thread that sends at least once a second, a three-second
   timeout and a five-second flush at exit. It never blocks or raises; when the collector is
   unreachable or the queue is full, records are dropped and the console says how many, at most
-  once a minute (`log.forward_failed`). Unset, nothing is sent and nothing else changes.
+  once a minute (`log.forward_failed`). It ignores `HTTP_PROXY`, since the collector is in the
+  namespace. Unset, nothing is sent and nothing else changes.
 * **Streams.** The worker and weekly processes write to `runs`, the portal to `portal`, and
   everything else to `admin`. Any process executing a run (a CLI run, the console's synchronous
   run, acceptance verification) writes that run's records to `runs`. Console actions on a run
@@ -27,13 +28,21 @@ unchanged except for one addition, below.
   `fluent-bit.conf` as the ConfigMap `alerts-bi-logs-config`, Elasticsearch host, port and account
   in the Secret `alerts-bi-logs-es`). The URL path is the record's tag, and each tag goes to its
   own daily index `<LOGS_INDEX_PREFIX>-<stream>-YYYY.MM.DD` (default prefix `alerts-bi`). It
-  buffers on its volume while Elasticsearch is unreachable, retries without limit, writes
-  deterministic ids so a retry never duplicates, and adds its arrival time as `received_at`.
+  buffers on its volume while Elasticsearch is unreachable and retries with backoff up to 15
+  minutes apart, dropping a chunk after `LOGS_RETRY_LIMIT` tries (default 60, roughly eight
+  hours), so neither a long outage nor records Elasticsearch keeps refusing hold the buffer
+  forever. It writes deterministic ids so a retry never duplicates, and adds its arrival time as
+  `received_at`.
 * **Document.** `@timestamp`, `level`, `proc`, `stream`, `event`, `message` (the sentence), the
   full identifiers (`team_id`, `run_id`, `job_id`, `backfill_id`, `batch_id`, `request_id`,
   `stage`), the event's own fields under `data.<event with _ for .>` so one field name never
   takes two types across events, `error` (type, message, frames, library frame count, causes)
-  for a failure, `line` (exactly the console line, for reading), `pod` and `version`.
+  for a failure, `line` (exactly the console line, for reading), `pod` and `version`. A
+  group's `alerts` list is the only top-level event field (a count with that name stays under
+  `data`). Every field keeps one type in every record, and dates are never replaced by a
+  placeholder, because Elasticsearch fixes a field's type when it first sees it and then refuses
+  records that disagree. URL credentials are removed from every string, and a non-finite
+  number is written as null.
 * **Model groups.** Each model group (one request batch) writes one `llm.group` record: its
   group type and value, partition, attempts, status (`succeeded` or `exhausted`), duration,
   state counts, token usage when the endpoint reports it, and `alerts`, a list with each
@@ -42,7 +51,8 @@ unchanged except for one addition, below.
   the model's justification. These records reach the console only at `LOG_LEVEL=debug`.
   Searching `alerts.application` and `alerts.key_field` therefore finds an alert in each run that
   sent it to the model; alerts with a rule finding, reused verdicts and runs with the model off
-  have no group record.
+  have no group record. A run resumed after an interrupted worker logs its groups again, with
+  the same `batch_id` and outcome.
 * **Content.** The logs now also carry, inside group records, the application, key field and
   model outcome of the alerts sent to the model. These are identities and enumerated outcomes,
   which `outputs.md` section 9 allows; documents, justifications, payloads and credentials stay
