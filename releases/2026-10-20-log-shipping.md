@@ -58,6 +58,14 @@ sha256 `fbc93caff137973da08f87a0bd5f06c55e2f15e30c20ade76644d7c6c732eeb5`; colle
   only uncomment) `LOG_FORWARD_URL` in an exported `config.env`, and notes that a resumed run logs
   its groups again with the same `batch_id`.
 
+## Merged with the updated base (2026-10-21)
+
+The base branch feat/structured-console-logs merged `main`, which gained the Decisions page
+needs-a-decision view. Design 45c38e2 merges it cleanly, and admin 011476d and portal 6efe884
+re-pin their snapshots to 45c38e2. After the merge, admin unit 1099 passed (including main's
+new tests); `ruff`, `ruff format --check`, `mypy` and `check_contracts.py --console` passed.
+Portal unit 508 passed; `ruff`, `mypy` and `poetry check --lock` passed.
+
 ## Not run
 
 - Nothing was deployed. `logging.yaml` was not rendered with `oc process` (no cluster); its
