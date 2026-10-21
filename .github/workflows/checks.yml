@@ -1,0 +1,23 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install poetry==2.3.1
+      - run: poetry check --lock
+      - run: poetry sync
+      # Contracts, instruction entry points and docs/mockups. The coordinated checks
+      # (check_contracts.py, run_integration.py) need app artifacts and SQL; see README.
+      - run: poetry run python scripts/check_docs.py
+      - run: poetry run ruff check .
+      - run: poetry run ruff format --check scripts

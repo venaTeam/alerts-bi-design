@@ -70,9 +70,11 @@ which fails on missing infrastructure instead of allowing a skipped release gate
 
 `check_docs.py` checks canonical syntax and navigation only. `check_contracts.py` verifies
 all SQL and revision-module SHA-256 entries against the installed admin artifact, plus API,
-registry and view contracts. Passing the former alone is not compatibility evidence. There is
-currently no design-repository CI job provisioning both application artifacts and SQL; run
-this coordinated gate before delivery and record the exact revisions. Portal's own CI runs
+registry and view contracts. Passing the former alone is not compatibility evidence. The
+`Checks` workflow (`.github/workflows/checks.yml`) runs `check_docs.py`, `ruff check .` and
+`ruff format --check scripts` on every push and pull request. There is currently no
+design-repository CI job provisioning both application artifacts and SQL; run this coordinated
+gate before delivery and record the exact revisions. Portal's own CI runs
 its standalone team-route regression tests against its pinned shared wheel on every PR.
 
 PR delivery is separate from deployment, merge and eventual repository archival.
