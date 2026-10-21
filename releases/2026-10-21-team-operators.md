@@ -21,8 +21,8 @@ Revisions, all on `feat/team-operators-list`:
   shipping, decision 009). Both apps pin `f8c021d`: it holds the log-shipping and
   team-operators sections, so neither snapshot loses log shipping.
 - admin `dd6dac5` (migration 020, team page panel, tests, README and runbook), `94f4297`,
-  `693cdcf` (ruff format of the 020 test only), `492d0eb` (a non-string operator in a stored
-  entry is unknown) and `c485d72` (snapshot pinned to design `f8c021d`, adding
+  `693cdcf` (ruff format of the 020 test only), `492d0eb` and `198c395` (a non-string v1 or v2
+  operator in a stored entry is unknown) and `c485d72` (snapshot pinned to design `f8c021d`, adding
   `docs/decisions/009-log-shipping.md` as the portal has it). Admin `main` had no new commits.
 - portal `d3576d0` (query, Overview card, tests, README and runbook), `7e8cb76`, and
   `3487ecd` (a non-string operator is unknown).
