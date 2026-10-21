@@ -37,8 +37,12 @@ Merge order:
 
 1. Merge design #26 with a merge commit, not a squash, so `f8c021d` stays reachable from
    design `main`. Otherwise both apps must be re-pinned after it lands.
-2. Then admin #27: its init container applies 020.
-3. Then portal #15.
+2. Merge admin #26 (log shipping) before admin #27 (product owner, 2026-10-21). #27 already
+   carries the log-shipping docs, and those describe files that only #26 adds. After #26
+   lands, merge admin `main` into #27 (no rebase), resolve the pinned-doc conflicts and keep
+   #27's design pin `f8c021d`, which contains #26's pin `45c38e2`.
+3. Then admin #27: its init container applies 020.
+4. Then portal #15.
 
 A portal built from this contract stays not ready until 020 is applied, and nothing but this
 order enforces it. An older portal ignores the new columns. 020 is view-only and roll-forward
