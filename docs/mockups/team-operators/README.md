@@ -1,9 +1,9 @@
 # Team operators mock (proposal, 2026-10-21)
 
-Proposal: show the team's operators on the team page in both the admin console and the review
-portal. Operators are the registry's `v1_operators` and `v2_operator` values
-(`contracts/teams.schema.json`) that route alerts to the team. This is a mock for review. It is
-not an accepted design decision and changes no behavior.
+Accepted 2026-10-21 and implemented (design "Team operators on the team page"): show the
+team's operators on the team page in both the admin console and the review portal. Operators are the registry's `v1_operators` and `v2_operator` values
+(`contracts/teams.schema.json`) that route alerts to the team. This folder keeps the reviewed
+mock; the design section is authoritative.
 
 Open the pages from a local HTTP server, so the stylesheet and script load:
 
@@ -38,17 +38,14 @@ Run/Review/Publish steps:
   the current registry, so the list always explains the alerts on the page.
 - The first six values, then "Show N more".
 - An empty state when the review listed no operators.
+- No explanatory sentence or registry version (removed in review on 2026-10-21).
 
-## Decisions needed before implementation
+## Resolved 2026-10-21
 
-1. **Admin source.** Show the current registry (as mocked) or the selected run's snapshot first?
-2. **Portal data.** The portal reads only `portal_*` views, and none exposes operators today. It
-   needs a view column or a new view with the published run's frozen operators. Admin owns that
-   migration, and it changes the admin-to-portal SQL contract.
-3. **Exposure.** Showing operator values to every portal reader is a new disclosure. Confirm that
-   operator values are fine to publish read-only to the teams.
-4. **Naming.** In this project "operator" also means the person using the console (migration
-   `019_erase_operator_names`). The panel's helper text says these are alert operator values.
-   Should the heading be "Alert operators" instead?
-5. **Placement.** Should the portal show it on every tab or only on Overview (as mocked)? Should
-   the admin team cards on `/` show an operator count too?
+1. **Admin source:** the current registry, with a note when the selected run's frozen list differs.
+2. **Portal data:** migration `020_portal_review_operators` adds `v1_operators` and `v2_operator`
+   to `portal_reviews` from the run's frozen registry entry.
+3. **Exposure:** the product owner asked for the portal to show them; the registry version stays
+   hidden.
+4. **Naming:** "Operators", as mocked.
+5. **Placement:** portal Overview only; the admin team cards are unchanged.
