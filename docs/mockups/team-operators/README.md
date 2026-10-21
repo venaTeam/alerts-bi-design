@@ -1,4 +1,4 @@
-# Team operators mock (proposal, 2026-10-21)
+# Team operators mock (accepted 2026-10-21)
 
 Accepted 2026-10-21 and implemented (design "Team operators on the team page"): show the
 team's operators on the team page in both the admin console and the review portal. Operators are the registry's `v1_operators` and `v2_operator` values
