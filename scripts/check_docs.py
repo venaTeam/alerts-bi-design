@@ -1,11 +1,28 @@
-"""Validate canonical contract syntax and portable instruction entry points."""
+"""Validate canonical contract syntax, portable instruction entry points and design mocks."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+#: A copied app stylesheet names its source app and commit, so a reader can tell it is frozen.
+COPIED_CSS = re.compile(r"/\* Copied from alerts-bi-(admin|portal) [0-9a-f]{7,40} ")
+
+
+def check_mockups() -> None:
+    """Each mock folder has a README, its pages' local files exist, and copied CSS says where
+    it came from. Mocks are reference material; the design document stays authoritative."""
+    for folder in sorted(p for p in (ROOT / "docs/mockups").glob("*") if p.is_dir()):
+        assert (folder / "README.md").is_file(), f"{folder.name}: README.md"
+        for page in folder.glob("*.html"):
+            for target in re.findall(r'(?:href|src)="([^"#:?]+)"', page.read_text("utf-8")):
+                assert (folder / target).is_file(), f"{folder.name}/{page.name}: {target}"
+        for sheet in folder.glob("*.css"):
+            assert COPIED_CSS.match(sheet.read_text("utf-8")), f"{folder.name}/{sheet.name}"
 
 
 def main() -> None:
@@ -29,6 +46,7 @@ def main() -> None:
     assert "020_portal_review_operators" == migrations["schema_head"]
     console = json.loads((ROOT / "contracts/console-http.json").read_text("utf-8"))
     assert console["schema_head"] == migrations["schema_head"]
+    check_mockups()
     print("Canonical contract JSON and instruction entry points are valid")
 
 

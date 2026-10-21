@@ -15,9 +15,12 @@ Then open `http://localhost:8231/admin.html` and `http://localhost:8231/portal.h
 bar at the top belongs only to the mock: it switches between four sample teams (v1 only with a
 registry change since the run, v2 only, migrating with many operators, no operators).
 
-The stylesheets are copies of admin `fb87c91` (shared `STYLESHEET` + `CONSOLE_CSS`) and portal
-`203fd7a` (`STYLESHEET`), so the pages look like the real apps. Each page's own `<style>` block
-holds the proposed new rules.
+The stylesheets are frozen copies of admin `fb87c91` (shared `STYLESHEET` + `CONSOLE_CSS`) and
+portal `203fd7a` (`STYLESHEET`), so the pages look like the apps did when the mock was reviewed.
+They are not kept in sync and will drift from the apps; the live styles are in admin
+`src/assets.py` and portal `src/assets.py`. Each page's own `<style>` block holds the rules the
+mock proposed. `scripts/check_docs.py` checks that each copy names its source commit and that
+every file a page links exists.
 
 ## What the mock shows
 
