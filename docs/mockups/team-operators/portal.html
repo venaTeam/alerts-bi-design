@@ -65,7 +65,6 @@ function operatorsCard(team) {
         `<div><dt><span class="chip v1">v1</span>${used.v1.length} operator${used.v1.length === 1 ? "" : "s"}</dt><dd>${v1}</dd></div>` +
         `<div><dt><span class="chip v2">v2</span>operator</dt><dd>${v2}</dd></div>` +
         "</dl>") +
-    `<p class="sub">The alerts in this review are the ones whose operator matches this list exactly. As of registry ${esc(used.registry || team.registry)}.</p>` +
     "</section>"
   );
 }
