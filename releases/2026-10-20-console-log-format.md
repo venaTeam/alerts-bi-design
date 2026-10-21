@@ -53,6 +53,16 @@ failed migration named no stage (both added). Exercising `db setup` against an u
 server then showed pymssql's compiled frame counted as the application's; frames with a relative
 source name now count as library frames, and shared 0.1.9 was rebuilt before it was vendored.
 
+## Merged with main (2026-10-21)
+
+Design, admin and portal `main` gained the Decisions page needs-a-decision view (design #23,
+admin #24) while these PRs were open. Design cf1e4f2 merges design `main`, keeping both new
+sections at the top of the design document. Admin 7da3545 merges admin `main`: the code merged
+cleanly, and its snapshot is re-pinned to cf1e4f2. Portal b1f48ff re-pins to cf1e4f2 (portal
+`main` had not moved). After the merge, admin unit 1079 passed (including main's new tests);
+`ruff`, `ruff format --check`, `mypy` and `check_contracts.py --console` passed. Portal unit 508
+passed, and `check_docs.py` passed.
+
 ## Not run
 
 - This repository's coordinated `scripts/run_integration.py`. Its tests read no log output, and
