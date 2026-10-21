@@ -30,8 +30,14 @@ def check_mockups() -> None:
                 if link.startswith(("#", "//")) or ":" in link.split("/", 1)[0]:
                     continue
                 target = link.split("#", 1)[0].split("?", 1)[0]
-                # A mock is opened from its own folder, so a root-relative path cannot resolve.
-                if target.startswith("/") or not (folder / target).is_file():
+                # A mock is served from its own folder: a root-relative path cannot resolve and a
+                # ../ path leaves it.
+                path = (folder / target).resolve()
+                if (
+                    target.startswith("/")
+                    or not path.is_relative_to(folder.resolve())
+                    or not path.is_file()
+                ):
                     raise SystemExit(f"Mock {folder.name}/{page.name}: {link} is not in the folder")
         for sheet in folder.glob("*.css"):
             if not COPIED_CSS.match(sheet.read_text("utf-8")):
