@@ -18,8 +18,8 @@ Revisions, all on `feat/team-operators-list` from current `main`:
 
 - design `368510a` (decision, outputs, contracts, check_docs) and `7740f3d` (migration contract
   pinned to admin `dd6dac5`).
-- admin `dd6dac5` (migration 020, team page panel, tests, README and runbook) and `94f4297`
-  (snapshot pinned to design `7740f3d`).
+- admin `dd6dac5` (migration 020, team page panel, tests, README and runbook), `94f4297`
+  (snapshot pinned to design `7740f3d`) and `693cdcf` (ruff format of the 020 test only).
 - portal `d3576d0` (query, Overview card, tests, snapshot and packaged `sql-views.json` pinned
   to design `7740f3d`, README and runbook).
 
