@@ -11,18 +11,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: A copied app stylesheet names its source app and commit, so a reader can tell it is frozen.
 COPIED_CSS = re.compile(r"/\* Copied from alerts-bi-(admin|portal) [0-9a-f]{7,40} ")
+#: Every href/src value, single- or double-quoted.
+LINK = re.compile(r"""\b(?:href|src)\s*=\s*(["'])(.*?)\1""")
 
 
 def check_mockups() -> None:
     """Each mock folder has a README, its pages' local files exist, and copied CSS says where
-    it came from. Mocks are reference material; the design document stays authoritative."""
+    it came from. Mocks are reference material; the design document stays authoritative.
+
+    Raises SystemExit rather than asserting, so the checks also run under ``python -O``.
+    """
     for folder in sorted(p for p in (ROOT / "docs/mockups").glob("*") if p.is_dir()):
-        assert (folder / "README.md").is_file(), f"{folder.name}: README.md"
+        if not (folder / "README.md").is_file():
+            raise SystemExit(f"Mock {folder.name}: missing README.md")
         for page in folder.glob("*.html"):
-            for target in re.findall(r'(?:href|src)="([^"#:?]+)"', page.read_text("utf-8")):
-                assert (folder / target).is_file(), f"{folder.name}/{page.name}: {target}"
+            for _, link in LINK.findall(page.read_text("utf-8")):
+                # Remote URLs, data URIs and in-page anchors are not files in the folder.
+                if link.startswith(("#", "//")) or ":" in link.split("/", 1)[0]:
+                    continue
+                target = link.split("#", 1)[0].split("?", 1)[0]
+                # A mock is opened from its own folder, so a root-relative path cannot resolve.
+                if target.startswith("/") or not (folder / target).is_file():
+                    raise SystemExit(f"Mock {folder.name}/{page.name}: {link} is not in the folder")
         for sheet in folder.glob("*.css"):
-            assert COPIED_CSS.match(sheet.read_text("utf-8")), f"{folder.name}/{sheet.name}"
+            if not COPIED_CSS.match(sheet.read_text("utf-8")):
+                raise SystemExit(f"Mock {folder.name}/{sheet.name}: no 'Copied from' source line")
 
 
 def main() -> None:
