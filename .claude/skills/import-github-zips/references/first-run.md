@@ -15,7 +15,8 @@ private work. Never guess it.
    here, `D` exists only on GitHub, `M` differs):
    - `expected_differences`: container files (`Dockerfile`, `.dockerignore`) and CI files
      (`.gitlab-ci.yml`, `.gitlab/`, `.github/`);
-   - `unexpected_differences`: everything else.
+   - `unexpected_differences`: everything else. Each list shows at most 50 entries;
+     `unexpected_count` gives the total.
 3. Tell the user the baseline commit and both lists.
    - `unexpected_differences` is empty: continue.
    - Otherwise stop and ask. Either the ZIP is not the commit the private code contains, and

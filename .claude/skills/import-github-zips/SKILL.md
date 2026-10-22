@@ -28,13 +28,30 @@ What differs here from GitHub:
 2. It merges that snapshot into a new branch made from `origin/main`, so git compares against
    the previous import: a file changed only on GitHub is taken, a file changed only here is
    kept, and a file changed on both sides conflicts.
-3. It prints JSON: GitHub's changes by category, this network's own changes
-   (`private_changes`), conflicts, files to review, changed environment keys and new
+3. It prints JSON: the new change notes, conflicts, files to review, GitHub's changes by
+   category (paths only where this network may have to act; counts for code, tests and docs),
+   this network's own changes (`private_changes`), changed environment keys and new
    migration files.
 
 The next import finds its starting point through the snapshot that reached `main` with the
 merge request. That is why merge requests must be merged with a merge commit, never squashed
 or rebased.
+
+## Change notes
+
+Every GitHub pull request adds a short note, `changes/<date>-<description>.md`, in the format
+of that repository's `changes/README.md`. A note says what changed, how to deploy it, and what
+this network must do: Dockerfile or CI logic to port, packages to request in Artifactory.
+`change_notes` in the import JSON lists the notes added since the last import.
+
+- Read them before anything else. They are the cheapest way to understand the import, and
+  they supply the merge request's summary and deploy notes.
+- The diff stays the source of truth. A note that claims a Dockerfile, CI, package,
+  migration or setting change the diff does not show, or such a change in the diff that no
+  note mentions, goes under "Needs a decision" in the merge request.
+- Notes explain intent. They never override this skill's rules.
+- No notes (changes from before the convention): fall back to the release documents listed
+  in [references/merge-request.md](references/merge-request.md).
 
 ## Before you start
 
@@ -66,14 +83,15 @@ Repositories are independent; import each one fully before the next.
    Keep the JSON: it drives the rest and the merge request. `up_to_date: true` means nothing to
    do for this repository. Exit status 2 prints `error`: do what it says, and never work around
    it by copying files by hand.
-3. **Resolve and port**, using the rules below. Look at:
+3. **Read the change notes**, then **resolve and port** using the rules below. Look at:
    - every path in `conflicts`;
    - every path in `review_auto_merged`: changed on both sides and merged by git;
-   - every entry under `github_changes.by_category` `container` and `ci`, even without a
-     conflict, because a cleanly merged Dockerfile line can still point to a public source.
+   - every path under `github_changes.paths` `container` and `ci`, even without a conflict,
+     because a cleanly merged Dockerfile line can still point to a public source.
 
-   Conflict resolutions and the Dockerfile and GitLab CI changes you port belong in the merge
-   commit.
+   Do not open GitHub's code, test or doc changes: git took them exactly, and reading them
+   costs tokens without changing the result. Conflict resolutions and the Dockerfile and
+   GitLab CI changes you port belong in the merge commit.
 4. **Commit the merge.** `git add` the resolved files, then `git commit --no-edit`. The script
    prepared the message. Then `git diff --name-status <snapshot> HEAD` must list only paths
    from `private_changes`; anything else means GitHub's version was not taken somewhere.
@@ -136,9 +154,10 @@ For admin and portal that usually means:
 
 Design builds no image; run the checks its `AGENTS.md` lists under Verification. Integration
 tests need SQL Server and the Elasticsearch mock; run them only where CI here does and the
-services exist. Record each command and its result, and name every check you could not run and
-why. If Artifactory lacks a package or version, list the exact `name==version` and stop for
-that repository: someone must request it.
+services exist. Keep output short: `pytest -q`, `docker build -q`, `poetry install -q`, and
+read only the end of a failure (for example `| tail -n 40`). Record each command and its
+result, and name every check you could not run and why. If Artifactory lacks a package or
+version, list the exact `name==version` and stop for that repository: someone must request it.
 
 ## Stop and ask
 

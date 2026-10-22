@@ -12,7 +12,8 @@ Commands (each prints one JSON object; exit status 2 means stop, and "error" say
   status   --repo CLONE --repository NAME           last imported GitHub commit
   baseline --repo CLONE --zip ZIP [--branch B --confirm]
                                                     first run: record what main already contains
-  import   --repo CLONE --zip ZIP --branch B        merge the ZIP into a new branch
+  import   --repo CLONE --zip ZIP --branch B [--full]
+                                                    merge the ZIP into a new branch
 
 Python 3.9+ and git only. Nothing here touches the network.
 """
@@ -37,6 +38,10 @@ SNAPSHOT_TRAILER = "GitHub-Commit"
 REPOSITORY_TRAILER = "GitHub-Repository"
 TIME_TRAILER = "GitHub-Commit-Time"
 TEMP_REF = "refs/github-import/tmp"
+#: Categories reported as counts only (their paths with --full).
+COUNT_ONLY = ("code", "tests", "docs")
+#: Differences listed in full by `baseline`; more are counted.
+LIST_LIMIT = 50
 HEX = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 ENV_KEY = re.compile(rb"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", re.MULTILINE)
 
@@ -385,6 +390,8 @@ def category(path: str) -> str:
         return "config"
     if first in ("tests", "test"):
         return "tests"
+    if first == "changes" and name.endswith(".md") and name != "README.md":
+        return "change-notes"
     if first in ("docs", "releases", "decisions") or name.endswith(".md"):
         return "docs"
     return "code"
@@ -442,13 +449,24 @@ def environment_keys(
     return changes
 
 
-def grouped(entries: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
-    groups: dict[str, list[dict[str, str]]] = {}
+def grouped(entries: list[dict[str, str]], full: bool) -> dict[str, Any]:
+    """Counts for every category; paths only where the private side may have to act.
+
+    GitHub's code, tests and docs merge as they are, so their paths are left out unless `full`.
+    """
+    counts: dict[str, int] = {}
+    paths: dict[str, list[dict[str, str]]] = {}
     for entry in entries:
-        groups.setdefault(entry["category"], []).append(
-            {key: value for key, value in entry.items() if key != "category"}
-        )
-    return dict(sorted(groups.items()))
+        counts[entry["category"]] = counts.get(entry["category"], 0) + 1
+        if full or entry["category"] not in COUNT_ONLY:
+            paths.setdefault(entry["category"], []).append(
+                {key: value for key, value in entry.items() if key != "category"}
+            )
+    return {
+        "count": len(entries),
+        "counts": dict(sorted(counts.items())),
+        "paths": dict(sorted(paths.items())),
+    }
 
 
 # --------------------------------------------------------------------------- commands
@@ -531,8 +549,9 @@ def cmd_baseline(args: argparse.Namespace) -> None:
             "A: only in the private repository; D: only on GitHub; M: differs. A dry run "
             "writes only an unreferenced snapshot object; --confirm writes a new one."
         ),
-        "expected_differences": expected,
-        "unexpected_differences": unexpected,
+        "expected_differences": expected[:LIST_LIMIT],
+        "unexpected_differences": unexpected[:LIST_LIMIT],
+        "unexpected_count": len(unexpected),
         "recorded": False,
     }
     if args.confirm:
@@ -645,7 +664,6 @@ def cmd_import(args: argparse.Namespace) -> None:
     github_changes = name_status(repo, base, snapshot)
     private_changes = name_status(repo, base, private_head)
     both = sorted(touched(github_changes) & touched(private_changes))
-    categories = grouped(github_changes)
     emit(
         {
             "repository": repository,
@@ -660,12 +678,14 @@ def cmd_import(args: argparse.Namespace) -> None:
             },
             "base_snapshot": base,
             "snapshot": snapshot,
+            "change_notes": [
+                entry["path"]
+                for entry in github_changes
+                if entry["category"] == "change-notes" and entry["status"] != "D"
+            ],
             "conflicts": conflicts,
             "review_auto_merged": [path for path in both if path not in conflicts],
-            "github_changes": {
-                "count": len(github_changes),
-                "by_category": categories,
-            },
+            "github_changes": grouped(github_changes, args.full),
             "private_changes": private_changes,
             "environment_keys": environment_keys(repo, base, snapshot, github_changes),
             "new_migration_files": [
@@ -714,6 +734,10 @@ def parser() -> argparse.ArgumentParser:
         if name == "baseline":
             command.add_argument(
                 "--confirm", action="store_true", help="create the branch and record it"
+            )
+        else:
+            command.add_argument(
+                "--full", action="store_true", help="also list code, test and doc paths"
             )
         command.set_defaults(run=runner)
     return root

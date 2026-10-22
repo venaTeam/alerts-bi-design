@@ -33,6 +33,10 @@ If GitLab later reports conflicts with `main` or asks for a rebase, never rebase
 - Changed on GitHub: <count> files (<category: count, ...>)
 - Baseline recorded in this merge request: <commit, or "no">
 
+## Summary
+
+<one line per change note: its title and what changed; "No change notes" if there are none>
+
 > Merge with a merge commit. Do not squash or rebase: the next import finds its starting
 > point through the snapshot commit on this branch. The "GitHub snapshot" commits contain
 > GitHub's tree as it was and are not meant to be reviewed; review the merge commit.
@@ -63,8 +67,9 @@ Not run: <command: reason>
 
 ## Deploy notes
 
-Build them from the import JSON. Also read new or changed GitHub documents that describe a
-release: `releases/*` in design, and `docs/*env-changes.md`, `docs/handoffs/*` and
+Start from the change notes' "Deploy" and "Private network" sections, then add what the
+import JSON shows and no note mentions. Read other release documents only for changes no note
+covers: `releases/*` in design, and `docs/*env-changes.md`, `docs/handoffs/*` and
 `docs/upstream/*` in admin and portal. Copy the deployment steps that apply to this
 repository. For a step that belongs to another repository, name that repository's merge
 request instead of repeating the step. When the release notes give an order across
@@ -75,8 +80,8 @@ portal when both change migrations or contracts.
 |---|---|
 | `new_migration_files` | The new migrations. Admin applies them with `alerts-bi-admin db setup` (its init container does this on deploy). Migrations are not rolled back, so a database backup must exist first |
 | `environment_keys` | Each key added or removed, per template file, and the ConfigMap or Secret entry it needs |
-| `dependencies` | New or changed packages, and whether Artifactory provided them |
-| `container` | What changed in the image and what you ported into the private Dockerfile |
-| `deployment` | Changes under `deploy/` that the private OpenShift configuration may need |
-| `contracts` | Changed SQL view or API contracts |
-| `config` | Changes to `config/teams.json` or its schema |
+| `github_changes.paths.dependencies` | New or changed packages, and whether Artifactory provided them |
+| `github_changes.paths.container` | What changed in the image and what you ported into the private Dockerfile |
+| `github_changes.paths.deployment` | Changes under `deploy/` that the private OpenShift configuration may need |
+| `github_changes.paths.contracts` | Changed SQL view or API contracts |
+| `github_changes.paths.config` | Changes to `config/teams.json` or its schema |

@@ -44,6 +44,17 @@ compares both sides against the previous import:
 The snapshot reaches `main` through the merge commit, and the next import starts from it. A
 squashed or rebased merge request removes it. The next import then asks for a new baseline.
 
+## Change notes
+
+A ZIP carries no commit messages or pull request descriptions. So every pull request on
+GitHub adds a short note, `changes/<date>-<description>.md`, in each repository it changes.
+The format is in that repository's `changes/README.md`. The note says what changed, how to
+deploy it, and what the private network must do.
+
+The import lists the notes added since the last import. The agent reads them first and builds
+the merge request's summary and deploy notes from them. Notes explain intent only: git still
+decides what is imported, and the agent flags any note that disagrees with the actual changes.
+
 ## First delivery
 
 The private repositories were updated by hand until now, so the first run needs a baseline:
@@ -65,9 +76,10 @@ requests.
 
 ## Making imports smooth from this side
 
-- Describe new settings, migrations and deployment steps in the repository, for example in
-  `docs/admin-env-changes.md` or a release note. The agent copies them into the deploy notes.
-- Keep Dockerfile changes about logic: what is copied, built and run. The agent ports that
-  logic. A change to base images or package sources needs a person inside to decide.
+- Add a change note to every pull request. Put new settings, migrations, deploy order and
+  new packages in it; the agent copies them into the deploy notes.
+- Keep Dockerfile changes about logic: what is copied, built and run, and say in the note
+  what to port. A change to base images or package sources needs a person inside to
+  decide.
 - GitHub ZIPs carry no executable bits, so every file is imported as a regular file. No
   repository has executable files today.
