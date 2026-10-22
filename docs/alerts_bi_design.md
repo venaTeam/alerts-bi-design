@@ -1,5 +1,323 @@
 # Alerts BI — Design Document
 
+## Team operators on the team page — accepted 2026-10-21
+
+On 2026-10-21 the product owner asked that the team page in both the admin console and the
+review portal list the team's operators. They reviewed the mock in
+`docs/mockups/team-operators/`, had the portal card's explanatory sentence (which named the
+registry version) removed, and asked for it to be implemented. Operators are the registry
+entry's `v1_operators` and `v2_operator` (section 3.1, `contracts/teams.schema.json`). Matching,
+runs, findings, CSV outputs and the shared/operations libraries are unchanged.
+
+* **Admin team page.** An "Operators" panel sits between the team header and the selected
+  week's Run, Review and Publish steps. It lists every v1 operator exactly as written (case
+  variants and repeats included, registry order) with a count, and the v2 operator, or "None" /
+  "Not set yet". The source is the current registry, labelled with its `registry_version` and
+  `effective_date`. Notes appear when the selected run's frozen entry
+  (`runs.registry_entry_snapshot`) listed different operators (naming that run's
+  `registry_version` and its list), when the team lists no operators (a run finds no alerts),
+  and when the team is no longer in the registry (then the selected run's operators are shown).
+  A line names other teams that list the same operator in the same schema, because those alerts
+  count for each team. A stored entry without an operator list is treated as unknown, not empty.
+* **Portal team week.** The Overview tab shows an "Operators" card in the side column, below
+  Phase. It lists the operators the published week was run with (its frozen entry, not the
+  current registry), so the list always explains that week's alerts: the first six values, then
+  "Show N more". When the entry listed none it says "No operators were listed for this team, so
+  this week has no alerts."; when the entry holds no operator list the card is omitted. The card
+  shows no registry version. It describes the whole team, like Phase, whatever applications are
+  selected.
+* **Disclosure.** This amends "What a reader sees" in section 7.10: operator values are the
+  team-supplied routing values for its own alerts, so the portal shows them. The registry file,
+  its version and every other registry field stay hidden from readers.
+* **Migration `020_portal_review_operators`.** `CREATE OR ALTER VIEW portal_reviews` keeps the
+  008 definition and appends `v1_operators` (`nvarchar(max)`, the entry's JSON array text) and
+  `v2_operator` (`nvarchar(4000)`), both NULL when the stored entry is not JSON. View only: no
+  row changes, earlier columns keep their positions, grants survive. Roll forward only.
+* **Compatibility and order.** The portal's readiness probe compiles the pinned view columns,
+  so a portal built from this contract is not ready until admin has applied 020. Deploy admin
+  (which migrates) first, then the portal. An older portal ignores the new columns.
+
+No deployment is authorized by this amendment.
+
+## Log shipping to Elasticsearch — accepted 2026-10-20
+
+On 2026-10-20 the product owner asked to send the logs to Elasticsearch as well
+([decision 009](../decisions/009-log-shipping.md)). Of the options offered (the cluster's own log
+forwarding, a Fluent Bit sidecar per pod, one Fluent Bit in the namespace receiving records over
+the network) they chose the last, with three indices, runs, admin and portal. They decided that
+console actions on a run belong to the admin index, and that every model group of every run is
+logged with its alerts inside it. Elasticsearch itself (index templates, retention, accounts,
+Kibana) is configured by whoever deploys it; this design only sends to it, and an agent must be
+able to deploy everything on OpenShift from the repository's files. What logs may contain is
+unchanged except for one addition, below.
+
+* **Transport.** With `LOG_FORWARD_URL` set (`http://alerts-bi-logs:9880` in a deployment), each
+  process also sends every record at `LOG_FORWARD_LEVEL` (default info) or above, as a JSON
+  array, to `<url>/runs`, `<url>/admin` or `<url>/portal`. Shared 0.1.10 holds the sender: a
+  bounded queue (16 MB), a background thread that sends at least once a second, a three-second
+  timeout and a five-second flush at exit. It never blocks or raises; when the collector is
+  unreachable or the queue is full, records are dropped and the console says how many, at most
+  once a minute (`log.forward_failed`). It ignores `HTTP_PROXY`, since the collector is in the
+  namespace. Unset, nothing is sent and nothing else changes.
+* **Streams.** The worker and weekly processes write to `runs`, the portal to `portal`, and
+  everything else to `admin`. Any process executing a run (a CLI run, the console's synchronous
+  run, acceptance verification) writes that run's records to `runs`. Console actions on a run
+  (submission, publication, withdrawal, deletion, decisions, refusals) stay in `admin`.
+* **Collector.** One Fluent Bit 5.1.2 Deployment `alerts-bi-logs` (`logging.yaml`, configured by
+  `fluent-bit.conf` as the ConfigMap `alerts-bi-logs-config`, Elasticsearch host, port and account
+  in the Secret `alerts-bi-logs-es`). The URL path is the record's tag, and each tag goes to its
+  own daily index `<LOGS_INDEX_PREFIX>-<stream>-YYYY.MM.DD` (default prefix `alerts-bi`). It
+  buffers on its volume while Elasticsearch is unreachable and retries with backoff up to 15
+  minutes apart, dropping a chunk after `LOGS_RETRY_LIMIT` tries (default 60, roughly eight
+  hours), so neither a long outage nor records Elasticsearch keeps refusing hold the buffer
+  forever. It writes deterministic ids so a retry never duplicates, and adds its arrival time as
+  `received_at`.
+* **Document.** `@timestamp`, `level`, `proc`, `stream`, `event`, `message` (the sentence), the
+  full identifiers (`team_id`, `run_id`, `job_id`, `backfill_id`, `batch_id`, `request_id`,
+  `stage`), the event's own fields under `data.<event with _ for .>` so one field name never
+  takes two types across events, `error` (type, message, frames, library frame count, causes)
+  for a failure, `line` (exactly the console line, for reading), `pod` and `version`. A
+  group's `alerts` list is the only top-level event field (a count with that name stays under
+  `data`). Every field keeps one type in every record, and dates are never replaced by a
+  placeholder, because Elasticsearch fixes a field's type when it first sees it and then refuses
+  records that disagree. URL credentials are removed from every string, and a non-finite
+  number is written as null.
+* **Model groups.** Each model group (one request batch) writes one `llm.group` record: its
+  group type and value, partition, attempts, status (`succeeded` or `exhausted`), duration,
+  state counts, token usage when the endpoint reports it, and `alerts`, a list with each
+  member's `schema`, `application`, `key_field`, `alert_id`, `state` and, when the model
+  answered, `assessment`, `principle_id` and `confidence`. It never holds the alert document or
+  the model's justification. These records reach the console only at `LOG_LEVEL=debug`.
+  Searching `alerts.application` and `alerts.key_field` therefore finds an alert in each run that
+  sent it to the model; alerts with a rule finding, reused verdicts and runs with the model off
+  have no group record. A run resumed after an interrupted worker logs its groups again, with
+  the same `batch_id` and outcome.
+* **Content.** The logs now also carry, inside group records, the application, key field and
+  model outcome of the alerts sent to the model. These are identities and enumerated outcomes,
+  which `outputs.md` section 9 allows; documents, justifications, payloads and credentials stay
+  out.
+* **Deployment.** `deploy/openshift/README.md` section 15 of alerts-bi-admin is the procedure:
+  mirror the image by digest, fill `logging-values.env` and `logs-es.env`, create the Secret
+  and ConfigMap, apply `logging.yaml`, send a check record, then set `LOG_FORWARD_URL` in
+  `alerts-bi-config` and restart admin and portal. Removing `LOG_FORWARD_URL` turns it off.
+
+## Console log format — accepted 2026-10-20
+
+The product owner approved this format on 2026-10-20, after reporting that the logs did not
+explain what the services and workers were doing and left out details an investigation needs
+([decision 008](../decisions/008-console-log-format.md)). It changes how records look and which
+records exist, not what they may contain. Section "Configuration and security" of the
+implementation plan and `outputs.md` still allow identifiers, hashes, counts, timings and
+redacted errors only.
+
+* **Line.** `<UTC time> <LEVEL> <process> <event> <message>  <key=value ...>  [<context>]`,
+  one record per line. For example:
+  `2026-10-20 14:05:58.330Z INFO  worker es.read_schema     Read 48,213 v1 rows in 49 pages, 47.3s (Elasticsearch 31.0s)  index=appchi-v1  [team=payments-core run=3f9a1c2b4d5e6f70 job=7c1e9a2f]`.
+  The event keeps its stable dotted name. The message is a plain-English sentence with grouped
+  numbers, short durations and UTC times. Fields the message does not mention follow it.
+* **Process.** `ui` (the console), `worker` (run-worker), `weekly`, `migrate` (`db setup` and
+  `db migrate`), `cli` (every other command) and `portal`.
+* **Context.** Team, run, job, backfill, model batch and request identifiers are bound once
+  for a piece of work and appear on every record inside it, including Elasticsearch, model
+  and SQL records. The console shows the first 16 characters of a run id (as the CLI and
+  console do), 8 of a job or backfill id and 12 of a batch id. The run's current `stage`
+  (`registry`, `es:v1`, `analysis:v1`, `checkpoint`, `llm`, `assemble`, `persist`) appears
+  only on warnings and errors.
+* **Levels.** Error: something a person or the schedule asked for did not happen (a job, run
+  or week failed, or a server error). Warn: the work went on in a worse state (a retry, an
+  exhausted model batch whose alerts stay unassessed, a recovered interrupted job, a held or
+  skipped week, a panel field suppression cannot read, unencrypted SQL). Info: a step started,
+  finished or produced an outcome. Debug: each model batch that succeeded and each successful
+  page read.
+* **Beginnings and ends.** A job, analysis, Elasticsearch read, model assessment, persistence,
+  migration and weekly invocation each record their end with duration and counts. A failure
+  names the stage, the time spent and the consequence ("marked failed", "the run continues").
+  Elasticsearch reads and model assessment record progress every 30 seconds.
+* **Errors.** The type and redacted message (at most 300 characters, URL credentials removed),
+  the chain of causes with where each began, and this application's frames as
+  `file:line in function`, innermost first, with library frames counted. No source text and
+  no local values.
+* **Worker.** It records its configuration when it starts (database, SQL host, Elasticsearch
+  host and indexes, model, registry and version) and, after 15 minutes without work, why it is
+  idle (nothing queued, backfill weeks waiting for the weekly job, or the execution lock held).
+* **Requests.** Each HTTP request gets an id, returned in `X-Request-ID` and bound to every
+  record made while it is handled, and one `http.request` record. Successful reads, and reads
+  of a missing page or method, are debug. Writes and other refusals are info. Server errors
+  are error, with the exception, and uvicorn does not report the same exception again. Every
+  refusal the console shows the operator is also recorded (`console.refused`).
+* **Output and settings.** Every record goes to stderr and stdout stays for command output.
+  `LOG_LEVEL` keeps debug, info, warn (or warning) and error, default info. `LOG_FORMAT` is
+  `console` (default) or `json`: one object per line, the document described in "Log shipping
+  to Elasticsearch" (amended 2026-10-20; it first had `ts`, `msg`, top-level fields and an
+  `exception` object). Colour is used only on
+  a terminal; `NO_COLOR` turns it off and `FORCE_COLOR` on. An unknown value falls back to the
+  default with a `log.settings_invalid` warning. Warnings and errors that libraries write
+  through Python logging (uvicorn, the Elasticsearch transport) use the same format.
+* **Libraries.** Shared 0.1.9 provides the format and the request logging, and operations
+  0.2.8 pins it. Admin adopts both; the portal vendors the shared wheel.
+
+## Decisions page lists findings that need a decision — accepted 2026-10-20
+
+On 2026-10-20 the product owner reported that finding the alerts still waiting for a human
+decision meant opening every team and published week. They asked the global Decisions page to
+list those findings too, chose the options below, and approved the mock built from the console's
+own layout. This extends "Schedule and Decisions" in "Operator console redesign". Decision rules,
+the append-only record, migrations, portal views, CSV outputs and the shared/operations libraries
+are unchanged.
+
+* **Needs a decision.** A finding needs a decision when its week is currently published (not
+  withdrawn) and no decision is recorded for that exact identity and finding id on that run. A
+  finding is what a decision may name (operations `findings_on`): each core rule id, each
+  readiness gap, and the model's cited principle when the model raised something. Every
+  published week counts, not only each team's latest, so an undecided finding stays listed until
+  someone decides it or the week is withdrawn. Pending is a recorded decision: a finding marked
+  pending is not listed. Decisions on other weeks do not carry over, matching the "No decision"
+  chip on a published week's findings.
+* **Two views.** `/decisions` opens on Needs a decision; `view=recorded` shows the recorded
+  decisions as before. A switch at the top shows both counts for the selected team. Needs a
+  decision lists findings newest week first, then team name, then the alerts with the most
+  events, fifty per page. Each row shows "No decision", the finding's title, team, week and
+  application, the finding type, schema and event count, and when the week was published; it
+  opens the exact finding, where Record decision is offered. The team filter applies to both
+  views; the decision filter only to recorded decisions. `view` accepts `needed` or `recorded`;
+  without it, a `state` filter opens the recorded view, so existing links keep their meaning.
+* **Empty state.** "Nothing needs a decision" (or "… for this team") with "Every finding of a
+  published week has a decision."
+
+The list is read from `review_publications`, `runs`, `alert_findings` and `finding_decisions`
+with the existing keys and the `ix_finding_decisions_run` index; no migration is needed.
+`contracts/console-http.json` and `contracts/console-openapi.json` record the `view` parameter.
+No deployment is authorized by this amendment.
+
+## Admin console without login — accepted 2026-10-19
+
+The product owner decided on 2026-10-19 to remove the login to the admin console entirely and
+to keep no record of who did what. This supersedes every earlier statement that console or API
+routes require the login proxy's identity, that the listener must bind to loopback, that forms
+carry actor-bound tokens, that actions are recorded under the signed-in person, and that the
+proxy admits only the standardization team (sections "Accepted consolidation", 7.12 and the
+backfill, async-runs and outputs contracts).
+
+* **Access.** No login proxy, OAuth client, access Role or client allowlist. The Route uses edge
+  TLS and the console listens on the pod address (`ADMIN_HOST=0.0.0.0`). Anyone who has the URL
+  and can reach the cluster's router may use every function, including Delete run; the product
+  owner keeps the URL within the operating team. No route returns 401.
+* **Forgery protection stays.** Every POST still needs a CSRF token, now an HMAC of the UTC day
+  under `ADMIN_SECRET`, and same-site requests; JSON clients still take it from `GET /csrf`.
+* **No names.** Runs, backfills, publications, withdrawals, decisions and cancellations record no
+  person. Name columns store `''` (a withdrawn week's `withdrawn_by` too, which a CHECK keeps
+  non-NULL), the optional backfill canceller is NULL, and run messages name nobody
+  ("Cancelled before it started."). The weekly scheduler still marks its own publications
+  `weekly-schedule`, which the console shows as "by the weekly schedule". Submission keys are
+  unique across all clients instead of per operator. The CLI drops `--by`, `serve` drops
+  `--dev-user`, and logs carry no operator field. Operations 0.2.7 publishes the library change;
+  the portal keeps the `portal_decisions.decided_by` column (always `''`) and no longer shows it.
+* **Erasure.** Migration `019_erase_operator_names`, which follows `018_alert_identity_hash`,
+  blanks every name already stored, keeping the `weekly-schedule` marker. Decisions stay
+  append-only: the migration disables their trigger only around its one UPDATE. Where two
+  people had used the same submission key, the rows keep apart as `#<row id>`. The revision
+  refuses downgrade, readiness requires it, and only a pre-019 backup holds the erased names,
+  so the migration gate applies.
+
+## Fixed-width alert identity keys — accepted 2026-10-19
+
+On 2026-10-19 a team's run failed to persist with SQL Server error 1946: an entry of 986 bytes
+for `pk_alert_findings` exceeded the 900-byte limit for clustered index entries. That key was
+`(run_id, alert_schema, application, key_field)` and `pk_llm_verdicts` was `(application,
+key_field, prompt_version, model_version)`. Both are clustered and could reach 1,668 and 1,856
+bytes, because `application` is NVARCHAR(256) and `key_field` NVARCHAR(512). SQL Server
+created them with only a warning. Beside a 64-character run id, any identity whose
+`application` and `key_field` together exceeded 384 characters made `persist_run` fail and
+roll back the whole run. The failing identity had 427.
+
+Every identity that fits its columns is stored. Migration `018_alert_identity_hash` adds a
+persisted computed column `identity_hash BINARY(32)` to `alert_findings` and `llm_verdicts`:
+SHA-256 over the byte length of the right-trimmed `application`, the right-trimmed
+`application` and the right-trimmed `key_field`. It rebuilds `pk_alert_findings` as `(run_id,
+alert_schema, identity_hash)` and `pk_llm_verdicts` as `(identity_hash, prompt_version,
+model_version)`, at most 164 and 352 bytes. Right-trimming reproduces SQL Server's
+trailing-space padding under the binary collation, so the new keys accept and reject exactly
+the pairs the old keys did. Identity, verdict reuse, decisions and ordering are unchanged.
+The engine's verdict lookups compute the same expression over their parameters, so they seek
+the key. The column is not exposed through any `portal_*` view. View columns in
+`contracts/sql-views.json`, CSV outputs, console routes and shared/operations interfaces are
+unchanged. Existing rows already satisfy the old keys, so the rebuild cannot conflict. Its
+downgrade is refused.
+
+Not covered: values longer than their columns (`application` over 256 or `key_field` over 512
+UTF-16 code units) still fail the run when stored. That has not been observed and needs a
+separate decision. The trailing-space limitation recorded below is unchanged.
+
+## Operator console redesign — accepted 2026-10-19
+
+The user reviewed three console mocks on 2026-10-18 and chose the guided-steps layout. On
+2026-10-19 they asked to merge New run and Backfill weeks into one New runs dialog, then to
+implement the result (design canvas "Admin UI redesign options", page "C · Full design"). This
+supersedes the 2026-10-08 visual clarification below: the run history table, the
+Overview/Findings/Decisions/Activity tabs, the split findings panel, the publish dialog and the
+global New run with a team selector. Where they conflict, it also supersedes the Selection and
+Display sections of [the backfill contract](backfill.md). Run execution, the job and backfill
+queues, publication, withdrawal, deletion and decision rules are unchanged. So are migrations,
+scoring, prompt text, CSV outputs, portal views and the shared/operations libraries.
+
+* **Navigation.** A left sidebar holds Teams, Schedule and Decisions (the signed-in operator it
+  also showed was removed on 2026-10-19 with the login); there is no top bar. On narrow screens the sidebar stacks above the page.
+* **Teams.** One card per registered team shows the team's newest week as Run, Review and
+  Publish progress with a one-line status: running or waiting, failed, held, ready to review,
+  published, withdrawn or no runs. Teams off the weekly schedule carry a Manual label. Teams
+  whose newest run failed or completed unpublished come first; `?show=attention` lists only
+  them.
+* **A team's week.** The team page shows one week at a time. It opens on the newest run, or
+  on a pending, queued or running manual submission for a newer week. A week picker lists the
+  team's runs, newest first, twenty per page. A three-step progress shows Run, Review and Publish, and
+  one panel below it shows the current step:
+  * a pending, queued or running submission, polled as before;
+  * a failed run: its error and New runs with that week checked;
+  * Review: the held or withdrawn note, v1 and v2 totals shown separately, the paginated
+    findings list and Continue to publish;
+  * Publish (`tab=publish`): a summary, the optional review note, Replace only when another run
+    of the same week is published, and Publish week;
+  * a published week: the portal note, Withdraw, and the findings with their latest decision.
+
+  Reviewing is not recorded; Publish is a second view of the same unpublished run. Run details
+  and activity stay collapsed at the bottom of every week: versions, run and publication
+  activity, the team's schedule log, the detailed analysis (charts, day by day, panel SQL and
+  the filtered work list), the three CSV downloads and Delete run. A work-list filter in the URL
+  opens that section.
+* **Finding.** `tab=findings&finding=<key>` shows one finding full width with its evidence, the
+  human decision and the decision history. Record decision is offered only for a published run.
+  Decision links still open the exact finding across pages. `tab=overview`, `tab=findings`
+  without a finding, `tab=decisions` and `tab=activity` remain valid URLs and show the week's
+  current step.
+* **New runs.** One dialog replaces New run and Backfill weeks. It lists the team's retained,
+  completed weeks that can run: weeks without a completed run, and weeks with an unpublished run
+  (which runs again). Weeks are newest first. The newest week is checked, or the selected week
+  when it failed, or the week a retention note warns about when the dialog opens from that note,
+  and a week that leaves retention within seven days is marked. Published,
+  queued or running, expired and incomplete weeks are not listed, so the console runs a
+  published week again only after it is withdrawn. Live, fake or off applies to every week,
+  live by default. One selected week is submitted exactly as the former New run: a manual job
+  with the same submission key, busy refusal and queuing during a backfill. Two to twelve weeks
+  are submitted exactly as the former backfill: one team, one active backfill, oldest first,
+  completed unpublished. `POST /teams/{team_id}/trigger` accepts repeated `week` dates (or the
+  former `run_at`) and dispatches on their count; `POST /teams/{team_id}/backfill` remains for
+  compatibility. The JSON trigger, CLI and API still run any Monday week, including a published
+  one.
+* **Several weeks running.** The former backfill panel appears above the week as "Running N
+  weeks" with the same counts, progress, per-week actions, cancel, retry, dismiss and polling.
+  The retained-gap banner is replaced by a note shown only when a week without a run, later
+  than the team's first run, leaves retention within seven days; weeks before a team's first
+  run are not a gap.
+* **Schedule and Decisions.** Schedule shows the next week to be reviewed, each team's latest
+  outcome and what happens next. Decisions adds team and decision filters. Neither page starts
+  runs; runs start from a team's page.
+
+The pages stay server-rendered with the content-addressed stylesheet and same-origin script,
+use no inline styles, keep dialogs keyboard-accessible and cover empty, running, failed, held,
+withdrawn and narrow-viewport states. `contracts/console-http.json` and
+`contracts/console-openapi.json` record the new query parameters. No deployment is authorized
+by this amendment.
+
 ## Exact key_field identity in SQL — accepted 2026-10-18
 
 The exact-application amendment below left `key_field` on the database's case-insensitive
@@ -220,7 +538,7 @@ Applied SQL and revision modules 001–008, schema head `008_measurement_basis`,
 analysis versions, deterministic identities, registry content and the hand-authored oracle
 remain unchanged. The migration-only `src.db.ledger` bridge is retained. Shared/operations
 0.1.3 records the producer relocation while preserving their public namespaces and behavior.
-Admin uses its local uv workspace packages; portal pins an immutable shared wheel. The legacy
+Admin uses its local path packages; portal pins an immutable shared wheel. The legacy
 API factory is a wire-contract test harness only, with no standalone server entry point.
 
 This change prepares source, artifacts and deployment examples. PR delivery does not deploy,
@@ -231,11 +549,11 @@ to transfer the migration job and exactly one weekly scheduler before retiring o
 
 The user approved implementing the team-centered unified operator mock and, on 2026-10-08, explicitly requested delivery in `alerts-bi-admin`. This amendment supersedes the separate unauthenticated trigger and admin web-service boundaries in sections 7.9, 7.12 and 7.16, the original repository-separation decision, and the earlier placement of the console in the runs repository. `alerts-bi-admin serve` owns the authenticated operator console and its run API. Its editable UI source lives in the admin repository. A pinned, immutable `alerts-bi-runs-runtime` wheel supplies existing analysis/API/config adapters in-process; no sibling checkout or separate trigger listener is required. The engine code is exported from a recorded runs Git revision without scoring, prompt or migration changes. Admin may import these packaged adapters, superseding its earlier no-runs-import boundary. The runtime and full runs distributions share a Python namespace and must use separate environments. Runs retains engine, migration, registry and weekly-job ownership. Portal remains a separate read-only service.
 
-The approved mock has three workspace navigation items: Teams, Schedule and Decisions; there is no separate Runs item. Opening a team shows its run history above a selected run with Overview, Findings, Decisions and Activity tabs. Overview uses compact, separate v1/v2 cards and a review-focus panel. Run details and versions expand to retain the detailed summary, complete-day charts, filtered SQL work list, panel SQL and four approved exports. Findings uses a selectable list beside one evidence and human-decision panel. The global Decisions page spans teams and runs; its links open the exact finding, including across pages. The run Decisions tab stays scoped to that run. Schedule shows real weekly review outcomes with links to team runs. Activity shows run/publication history and the team's schedule log. New run, Publish review, Withdraw review and Record decision use accessible modal dialogs. Analysis completion and publication state are separate. This visual clarification, accepted 2026-10-08, corrects the implementation to match the user's mock rather than replacing its navigation or exposing all features on one page.
+The approved mock has three workspace navigation items: Teams, Schedule and Decisions; there is no separate Runs item. Opening a team shows its run history above a selected run with Overview, Findings, Decisions and Activity tabs. Overview uses compact, separate v1/v2 cards and a review-focus panel. Run details and versions expand to retain the detailed summary, complete-day charts, filtered SQL work list, panel SQL and four approved exports. Findings uses a selectable list beside one evidence and human-decision panel. The global Decisions page spans teams and runs; its links open the exact finding, including across pages. The run Decisions tab stays scoped to that run. Schedule shows real weekly review outcomes with links to team runs. Activity shows run/publication history and the team's schedule log. New run, Publish review, Withdraw review and Record decision use accessible modal dialogs. Analysis completion and publication state are separate. This visual clarification, accepted 2026-10-08, corrects the implementation to match the user's mock rather than replacing its navigation or exposing all features on one page. **Superseded 2026-10-19:** see "Operator console redesign" at the top of this document.
 
 New run is scoped to the selected registered team, takes a UTC window end and live/fake/off model mode, and invokes the existing synchronous execution/persistence/reporting path under the existing process gate. Its window is exactly the preceding 168 hours. UI and JSON triggers share the gate. Manual completion does not publish. Existing publish/replace/gap, withdraw-with-reason and published-run decision rules remain authoritative. Actions return to the selected team/run; an explicit cross-team run selection is refused. No migration, scoring, prompt, deterministic identifier or output-content changes are authorized by this consolidation.
 
-All console and API routes require the proxy identity (or an explicitly supplied local `--dev-user`). The listener refuses non-loopback addresses and requires `ADMIN_SECRET` of at least 32 characters. Browser writes use same-site CSRF forms; JSON `POST /runs` requires `X-CSRF-Token` obtained from authenticated `GET /csrf`. No unauthenticated trigger Service remains in the deployment topology. Existing request/response payloads and export routes are retained behind authentication; the old API factory is a compatibility/test harness, not a deployment entry point. Default port is 8200; `ADMIN_*` configuration is retained (`ADMIN_OUT_DIR` was removed on 2026-10-17; runs write no files) with existing `SQL_*`, `ES_*` and `LLM_*` runtime settings. One replica and one worker preserve the existing process-local gate guarantee.
+**Superseded 2026-10-19 by "Admin console without login":** routes need no identity, the listener may bind any address, and the CSRF token is no longer bound to a user. Original text: All console and API routes require the proxy identity (or an explicitly supplied local `--dev-user`). The listener refuses non-loopback addresses and requires `ADMIN_SECRET` of at least 32 characters. Browser writes use same-site CSRF forms; JSON `POST /runs` requires `X-CSRF-Token` obtained from authenticated `GET /csrf`. No unauthenticated trigger Service remains in the deployment topology. Existing request/response payloads and export routes are retained behind authentication; the old API factory is a compatibility/test harness, not a deployment entry point. Default port is 8200; `ADMIN_*` configuration is retained (`ADMIN_OUT_DIR` was removed on 2026-10-17; runs write no files) with existing `SQL_*`, `ES_*` and `LLM_*` runtime settings. One replica and one worker preserve the existing process-local gate guarantee.
 
 The implementation remains server-rendered with a content-addressed stylesheet and a small same-origin script for accessible dialogs, team selection, UTC-window previews and trigger feedback. Empty teams, failed runs, refusal messages, keyboard-accessible forms and narrow viewports are required states. Infrastructure rollout is a separate authorized action; see `unified-console-deployment.md`.
 
@@ -313,7 +631,7 @@ Notes that matter for measurement:
 * `severity` does **not** map 1:1. `warning` maps to `warning` cleanly; `error` and `major` must be re-decided per alert against the Wake-Up Test. There is deliberately **no published mapping** — each team decides per alert using the guide.
 * `impact` and `runbook_url` are optional today and will be made required later. The standard is therefore **not enforced at ingest**, which is precisely why a BI layer is needed.
 * **The v2 `key_field` hash is built from every field *except* `status`, `message`, and the time fields** (confirmed 2026-08-27). Two consequences: the key is stable across 12-hour re-fires and across `firing` -> `resolved`, so `distinct_alerts` is meaningful; but the key *does* change when `severity`, `impact`, or `runbook_url` change — which is exactly what phase 1 and phase 2 ask teams to do. See section 3.7.
-* **Index names and field mappings are exactly as defined in this table and in the mock indices** `appchi-v1` / `appchi-v2` (confirmed 2026-08-27). No renaming to reconcile.
+* **Index names and field mappings are exactly as defined in this table and in the mock indices** `appchi-v1` / `appchi-v2` (confirmed 2026-08-27). No renaming to reconcile. **Amended 2026-10-19 (`operator` mapping):** this was inaccurate for `operator`. In production, both `appchi-v1` and `appchi-v2` map `operator` as analyzed `text` with a `keyword` subfield (`operator.keyword`); it is not a keyword-only field. A `terms` filter on the analyzed `operator` field compares lowercased tokens, so any registry operator containing an uppercase letter (for example `893_Lannister`) matched no rows. Operator matching remains exact and case-sensitive (section 3.1): the engine reader, the scale probe and the Kibana panels filter on `operator.keyword`, never on the analyzed field. The mock generator now mirrors the production mapping (`text` plus a `keyword` subfield), so the mock reproduces this behavior ([alerts-bi-admin PR #18](https://github.com/venaTeam/alerts-bi-admin/pull/18)). Field names are unchanged; only the `operator` mapping and the field that exact filters address are corrected.
 
 ### 1.4 Migration phases
 
@@ -357,7 +675,7 @@ Six problems shape the design.
 
 ### 3.1 Team attribution is hard in v1
 
-In **v2** it is trivial: `operator` is derived from the API key and is 1:1 with a team.
+In **v2**, `operator` is derived from the API key. Registry entries may intentionally share that value (amended 2026-10-18).
 
 In **v1**, `operator` is an open free-text field and teams use multiple custom values, so having a value does not identify a team. There is no reliable ownership column.
 
@@ -365,20 +683,26 @@ In **v1**, `operator` is an open free-text field and teams use multiple custom v
 
 This supersedes two earlier positions, both now withdrawn: that the panel's SQL query *is* the ownership definition, and that it is a *seed* from which ownership is expanded. Both were attempts to recover an operator list from a query, and the reasoning that killed the first one applies to the second — **a panel query cannot define ownership, because it is a view.** A team whose panel reads `WHERE operator = 'batch-team' AND application = 'test'` also sends alerts under that operator with a different `application`; those alerts are theirs, are in the pipeline, and nobody on that team ever sees them. A query that both narrows *and* excludes cannot yield the full set no matter how carefully it is parsed. Asking for the list directly is strictly better.
 
-Two facts make the operator list sufficient on its own:
+The supplied operator mapping determines each selected team's alert set:
 
-* **`operator` values are team-exclusive.** Two teams picking the same free-text string is possible in principle but vanishingly unlikely in practice, so an operator value belongs to one team.
-* **`application` values are not.** An application is owned by a specific team, but two teams may share an application *name* — they will differ in `operator`. The pair (`operator`, `application`) is team-unique while `application` alone is not, so `application` may never claim alerts. In the post-MVP company-wide attribution audit, application is used only as a **suggested** owner for unclaimed alerts whose operator is useless, offered for human confirmation and never auto-assigned.
+* **Operator values may be shared.** As requested on 2026-10-18, the registry accepts repeated values within one v1 list and across teams, including v1/v2 overlaps. Each selected team independently queries its configured operators; the same alert may therefore appear in separate teams' runs. Repeated filter values do not multiply rows within a run.
+* **Applications never establish ownership.** Neither `application` nor (`operator`, `application`) is assumed to identify a unique registry team. In the post-MVP attribution audit, application may only suggest an owner for human confirmation.
 
 What this buys beyond correctness: **the LLM leaves the ownership path entirely.** Section 5.2's central risk — a misclassified predicate silently changing which alerts belong to a team, with no error raised — can no longer occur, because no classification feeds ownership. The confidence routing, the delta check and the SQL-hash freeze all existed to contain that risk.
 
 The registry stays **versioned**, for the same reason as before: an operator list edited later must be distinguishable from a team whose behaviour changed, and history must be re-runnable.
 
-**The registry is a validated JSON document at `config/teams.json`** (decided 2026-08-29), with a checked-in JSON Schema. Its root contains `registry_version` and `teams`. Each team contains a stable unique `team_id`, mutable `display_name`, `v1_operators`, nullable `v2_operator`, and optional `panels`. A panel contains a stable panel id, target schema, SQL text, and supplied variable definitions. `v1_operators` may be empty after migration and `v2_operator` may be `null` before migration, but at least one source operator must exist. Exact operator values are case-sensitive and may not be assigned to more than one team; case variants used by one v1 team are listed explicitly. Registry validation completes before any ES query.
+**The registry is a validated JSON document at `config/teams.json`** (decided 2026-08-29), with a checked-in JSON Schema. Its root contains `registry_version` and `teams`. Each team contains a stable unique `team_id`, mutable `display_name`, `v1_operators`, nullable `v2_operator`, and optional `panels`. A panel contains a stable panel id, target schema, SQL text, and supplied variable definitions. `v1_operators` may be empty after migration and `v2_operator` may be `null` before migration, but at least one source operator must exist. Exact operator values remain case-sensitive; case variants used by one v1 team are listed explicitly. **Amended 2026-10-18 (user decision):** duplicate operators are allowed within and across entries. `team_id` remains a nonempty, case-sensitive unique string, with no slug-format regex; supplied IDs are preserved without normalization. IDs must fit `NVARCHAR(128)` (128 UTF-16 code units), contain no control characters or unpaired surrogates, and have no leading or trailing whitespace. This supersedes the previous operator-exclusivity and lowercase-slug validation rules. Registry validation completes before any ES query.
+
+The `team_id` description in `contracts/teams.schema.json` states normative, consumer-enforced semantics. JSON Schema validates the basic type and code-point length; it cannot express the UTF-16 storage limit through `maxLength` alone. Every registry consumer must additionally enforce exact cross-team uniqueness, no surrounding whitespace or Unicode `Cc`/`Cs` characters, and at most 128 UTF-16 code units. The operations registry validator is the reference implementation; passing JSON Schema alone is not sufficient. No slug regex is required.
+
+**Review correction, 2026-10-18:** migration `017_case_sensitive_teams` sets all eight stored `team_id` columns to `Latin1_General_100_BIN2` and refreshes portal views, so `team-a` and `Team-A` have independent history, queues, decisions and publications even on a case-insensitive database. SQL equality ignores trailing spaces even under BIN2; the registry therefore rejects surrounding whitespace rather than changing supplied IDs. The migration preserves data and index definitions and is transactional; downgrade is refused because case-distinct IDs may coexist afterwards. Admin readiness requires migration 017.
+
+Admin and portal retain existing alphanumeric/hyphen/underscore team URLs. Other IDs use one reserved `~`-prefixed UTF-8 hex segment, decoded exactly once at each team HTTP entry point. This carries slash-containing IDs through workspace, summary, trigger, backfill and published-week navigation without confusing action suffixes, literal percent escapes or dot segments. Both applications use shared 0.1.8; admin uses operations 0.2.6. Deploy the migration and both consumers before admitting these IDs. Admin access remains the existing standardization-team gate, not per-registry-team authorization.
 
 Every run stores the declared `registry_version`, SHA-256 of the complete registry document, and the selected team entry as an immutable JSON snapshot. The repository carries a mock registry built from the existing mock teams; production values replace or extend the data without changing the application contract.
 
-This is a v1-only problem. v2's `operator` is derived from the API key and is 1:1 with a team, so ownership there is exact — one more thing the migration structurally fixes.
+V2's `operator` is derived from the API key, so matching does not depend on free-text attribution. As amended 2026-10-18, multiple registry teams may intentionally map to that same operator; each selected team's alert set follows its supplied mapping.
 
 ### 3.2 ...but their queries also hide their garbage
 
@@ -974,7 +1298,7 @@ Four states are kept distinct and never inferred from one another:
 
 **Publication is back to back.** Runs are managed so that published weeks never overlap. Publishing refuses a run whose 168-hour window overlaps any current publication of the same team. It also refuses one that leaves a gap after that team's latest published week, unless the operator passes `--allow-gap` explicitly. Republishing the same week with a different run needs `--replace`, which withdraws the earlier publication rather than deleting it. A publication can be withdrawn with a reason. Withdrawn rows are kept for audit and never shown. A run that is currently published cannot be re-persisted underneath its readers: the pipeline refuses, and the run has to be withdrawn first.
 
-**What a reader sees is alert data, not service internals.** The portal shows the week covered, when it was published, the review note, the alert fields, the findings with their evidence, and the decisions. It shows no run id, registry, ruleset, prompt or model version, run timing or document hash. Those stay in the scorecard and the operator CLI, where the standardization team needs them.
+**What a reader sees is alert data, not service internals.** The portal shows the week covered, when it was published, the review note, the alert fields, the findings with their evidence, and the decisions. It shows no run id, registry, ruleset, prompt or model version, run timing or document hash. Those stay in the scorecard and the operator CLI, where the standardization team needs them. **Amended 2026-10-21:** the team week's Overview also lists the operators the week was run with; see "Team operators on the team page" at the top of this document.
 
 **Volume in the portal is a weekly total.** For each schema separately it shows **alert events in the week** (every firing, repeats included, `sum(daily_metrics.alerts)`) and **distinct alerts in the week** (distinct `application` + `key_field` identities in the 168-hour window, which equals the number of work-list rows for that schema). This amends section 3.3 for the portal only; the scorecard and the CSV exports keep the per-day distinct rate. v1 and v2 are never added together and no cross-schema or migration percentage is shown.
 
@@ -1044,8 +1368,11 @@ Scheduling is otherwise unchanged from the design: the CronJob is the only trigg
 * It shows every registered team, whether it is on the schedule, its latest published week and the schedule's last outcome; every run of a team with its publication state; each run's full scorecard, rendered from SQL; and a published week's findings with their decision history.
 * It lets an operator publish a run (with a note or `replace`), withdraw a published week with a reason, permanently delete a run, and record a decision on a finding. Publication, withdrawal and decisions use the same operations as the command line and follow section 7.10.
 * **Every action is recorded under the signed-in person's identity**, from the login proxy.
+  **Superseded 2026-10-19:** no action records a person; see "Admin console without login".
 
-**Access.** The app has no login of its own. It sits behind OpenShift's `oauth-proxy`, which signs the person in and admits only the standardization team (a SubjectAccessReview that only that group's role satisfies), and passes their name in `X-Forwarded-User`. The app trusts that header, which is safe only because nothing else can reach the app: it binds to loopback and refuses any other address, and the proxy is a sidecar sharing the pod's loopback. Every write is a POST carrying an HMAC token of the user and date under `ADMIN_SECRET`, and a browser-declared cross-site request is refused, so a page elsewhere on the network cannot act through a signed-in operator's browser. It runs with the owning SQL credential, has its own internal-only Route, and is never mounted on the portal or the trigger surface.
+**Access.** **Superseded 2026-10-19 by "Admin console without login":** there is no proxy, no
+access check and no identity; anyone who can reach the Route may use the console. Original
+text: The app has no login of its own. It sits behind OpenShift's `oauth-proxy`, which signs the person in and admits only the standardization team (a SubjectAccessReview that only that group's role satisfies), and passes their name in `X-Forwarded-User`. The app trusts that header, which is safe only because nothing else can reach the app: it binds to loopback and refuses any other address, and the proxy is a sidecar sharing the pod's loopback. Every write is a POST carrying an HMAC token of the user and date under `ADMIN_SECRET`, and a browser-declared cross-site request is refused, so a page elsewhere on the network cannot act through a signed-in operator's browser. It runs with the owning SQL credential, has its own internal-only Route, and is never mounted on the portal or the trigger surface.
 
 No alerting was added: problems surface as failed CronJob runs and on the admin app's team list.
 
@@ -1071,7 +1398,7 @@ remain append-only while their parent run exists. Migration `009_run_deletion` p
 decision cleanup only in the owning connection's explicit whole-run deletion scope;
 a checked parent foreign key rejects orphan inserts, and updates remain forbidden. Deletion
 uses the manual gate, scheduler lock, model-review lock and run-row lock; active work is
-refused. The authenticated actor and run id are logged without alert content.
+refused (narrowed to the run's own work on 2026-10-20, below). The run id is logged without alert content (the actor was dropped on 2026-10-19).
 
 **Concurrency clarified 2026-10-13:** manual HTTP/API runs, manual CLI runs and reports, the weekly
 schedule and deletion share the database's existing `alerts-bi-weekly` SQL session lock.
@@ -1090,6 +1417,20 @@ tracked; deleting the run leaves them, including `alert_worklist.csv`, until rem
 remain because other runs can use them. Deleting a published run removes it from the portal
 and all its download routes. The weekly schedule may recreate a deleted due week; deletion
 does not disable enrollment. No stored run is deleted as part of installing this change.
+
+**Amended 2026-10-20 (product owner): a running job no longer blocks deleting other runs.**
+The worker holds the shared `alerts-bi-weekly` lock for a whole job, so an operator could not
+delete any run while one job (or a long backfill) ran. Deletion now refuses only work on the
+run itself: that run's own pending, running or queued job, its active model review, or a
+publication change holding its row. When the shared lock is free, deletion takes it as
+before. When it is taken and a job holds the active slot for another run, deletion goes
+ahead without it: while a job holds the slot, CLI runs and reports, the weekly schedule,
+acceptance verification and synchronous HTTP runs refuse to start, so the lock's holder can
+only be the worker, and deletion locks that job's row so the worker cannot finish and hand
+the lock on until the deletion commits. When the lock is taken and no job holds the slot,
+something without a job record (a CLI run or report, the weekly schedule) holds it, and
+deletion still returns 409, so a CLI rerun or report of the same run keeps blocking its
+deletion as the 2026-10-13 clarification requires.
 
 ### 7.13 LLM review quality, evaluation and durable audit
 

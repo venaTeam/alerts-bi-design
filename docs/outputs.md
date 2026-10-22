@@ -192,8 +192,8 @@ or a reader will see one enormous row.
 
 Shapes are declared as Pydantic models and checked against the pinned wire contract. The
 unified admin listener disables public `/openapi.json` and `/docs`; the legacy API factory
-exists only for contract tests. Every supported route below requires operator identity,
-and JSON writes require a same-site CSRF token from authenticated `GET /csrf`.
+exists only for contract tests. Since 2026-10-19 no route requires an identity (design "Admin
+console without login"); JSON writes require a same-site CSRF token from `GET /csrf`.
 
 `POST /runs` takes a JSON body:
 
@@ -209,7 +209,7 @@ are not expected totals for the newly selected Monday window.
 `llm` is `live` (the default), `fake` or `off`, mirroring the CLI's
 default, `--fake-llm` and `--no-llm`.
 
-Admin's `POST /runs/{run_id}/delete` requires same-site actor-bound form CSRF and
+Admin's `POST /runs/{run_id}/delete` requires same-site form CSRF and
 `confirm_delete=1`. It permanently removes that run and its publications/decisions/results;
 all its GET report and download routes then return 404. The redirect selects the team
 without the deleted run id. SQL views and CSV columns are unchanged. See design section
@@ -294,7 +294,10 @@ needs defending.
 
 Alert documents, credentials and complete LLM payloads never appear in logs — logs carry
 identifiers, hashes, counts, timings and redacted errors only. The audit payloads live in
-SQL and nowhere else.
+SQL and nowhere else. Since 2026-10-20 (design "Log shipping to Elasticsearch") each model
+group's log record lists its alerts by `schema`, `application`, `key_field` and `alert_id`
+with their state and, when the model answered, its assessment, principle and confidence;
+never the document or the justification.
 
 ---
 
@@ -306,7 +309,7 @@ described here because its numbers are the ones most easily misread against the 
 
 | View | One row per | Holds |
 |---|---|---|
-| `portal_reviews` | published week | team, week bounds, publication time, review note, phase, readiness, `basis_changed` (true when the previous published week of the team ran under a different basis, so the retirement estimate stops looking back; migration 008 compares the team's own registry entry, its operators and panels, instead of the whole-file registry version) and `v1_rule_effort_days` (the team's optional `planning.v1_rule_effort_days` override) |
+| `portal_reviews` | published week | team, week bounds, publication time, review note, phase, readiness, `basis_changed` (true when the previous published week of the team ran under a different basis, so the retirement estimate stops looking back; migration 008 compares the team's own registry entry, its operators and panels, instead of the whole-file registry version), `v1_rule_effort_days` (the team's optional `planning.v1_rule_effort_days` override), and since migration 020 `v1_operators` (JSON array text) and `v2_operator`, the operators the week was run with from the run's frozen registry entry (NULL when that entry is not JSON) |
 | `portal_schema_totals` | published week and schema | events, distinct alerts, rule-flagged events, suppressed events, the five state counts, readiness gaps, alerts needing attention, `unseen` (events, `NULL` when no panel was supplied or for a week stored before migration 005), `unseen_alerts` and `r6_alerts` |
 | `portal_alerts` | alert in a published week | the work-list columns plus `impact`, `runbook_url`, `alert_status` and `time_created` extracted from the stored document, `attention_rank`, and the R6 and `unseen` columns: `clear_count`, `max_clear_cycles_24h`, `fire_pattern`, `unseen`, `max_episode_firing_rows` (a diagnostic only) and `open_since` |
 | `portal_decisions` | human decision made on a published week | finding id, `pending` / `confirmed` / `dismissed`, note, time, operator |

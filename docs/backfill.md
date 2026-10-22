@@ -8,6 +8,18 @@ deterministic-only, model-free sweep), the excluded-scope entry for model classi
 backfilled history, the matching flow and blueprint steps, and the async contract's refusal to
 queue work while a backfill is in progress. The weekly scheduler still never backfills on its own.
 
+## Console redesign — 2026-10-19
+
+The user merged New run and Backfill weeks into one New runs dialog (design section "Operator
+console redesign"). Selecting two to twelve weeks there submits a backfill under the admission
+rules below; selecting one week submits a manual run. The dialog lists only weeks that can be
+picked, newest first, instead of month calendars, so decision 8 and the calendar description in
+"Selection and admission" no longer apply. Picking a published week, or a week already queued or
+running, is not offered rather than shown as locked. The progress panel is titled "Running N
+weeks", and the retained-gap banner is replaced by a note shown only when a week without a run,
+later than the team's first run, leaves retention within seven days. Admission, the queue, execution, the routes
+and migration 014 are unchanged.
+
 ## Product decisions (user, 2026-10-14)
 
 1. **The model is on.** Backfill offers the same live/fake/off model mode as New run, with live
@@ -39,8 +51,9 @@ retention, or not complete yet. The dialog lists the selected weeks in run order
 UTC windows, warns when a selectable week leaves retention within seven days, and offers the
 live/fake/off model mode with live selected.
 
-`POST /teams/{team_id}/backfill` uses the console's same-site actor-bound CSRF form and a
-per-form submission key. Repeating the key returns the same backfill; reusing it with different
+`POST /teams/{team_id}/backfill` uses the console's same-site CSRF form and a per-form
+submission key (amended 2026-10-19: the token is no longer bound to a user, and keys are unique
+across all clients; see design "Admin console without login"). Repeating the key returns the same backfill; reusing it with different
 weeks or model mode is refused with 409. The server accepts 1–12 distinct Mondays and refuses
 the whole request (400 or 409, nothing stored) when the team is not registered, a week is not a
 Monday 00:00 UTC boundary, is not yet complete, starts more than 84 days before acceptance, has
@@ -107,7 +120,8 @@ weeks have no completed run and when the oldest leaves retention.
 | `POST /run-jobs/{job_id}/cancel` | Remove one queued week |
 | `POST /run-jobs/{job_id}/retry` | Retry one failed backfill week |
 
-All require operator identity; POSTs require the same-site actor-bound form token. The run job
+None requires an identity since 2026-10-19 (design "Admin console without login"); POSTs require
+the same-site form token. No requester or canceller is recorded. The run job
 status values become pending, queued, running, completed, failed and cancelled.
 `contracts/console-openapi.json` is regenerated from the console.
 

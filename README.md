@@ -19,12 +19,63 @@ Keep parent workspace routing outside Git; `workspace/workspace-spec.json` is th
 
 ## Checks
 
-`uv sync --frozen` and `uv run python scripts/check_docs.py` validate documentation inputs.
+Python 3.12+ and Poetry 2.3.1 are required. Design is not a distributable package
+(`package-mode = false`), so `poetry sync` installs only the locked check tools from the
+committed `poetry.lock`; `poetry check --lock` validates it.
+
+```powershell
+poetry sync
+poetry run python scripts/check_docs.py
+```
+
+`check_docs.py` validates documentation inputs.
 For coordinated checks, install the admin and portal wheels plus shared/operations wheels
 into an isolated environment. Run `python scripts/check_contracts.py --sql --console`, then
 `python scripts/run_integration.py --registry <admin-registry-artifact>`. Provide only local
 SQL/ES test settings. Suites reset only `alerts_bi_test` and run serially. The original mock
 generator and oracle are maintained in admin; no duplicate fixture system lives here.
+
+### Reproducing the team-identity integration check
+
+The documentation environment intentionally does not declare application packages as runtime
+dependencies. The coordinated test needs explicitly selected admin and portal release wheels,
+shared 0.1.8 and operations 0.2.7; those packages are not fetched from an assumed public index.
+Build the apps at the revisions recorded in `releases/2026-10-19-admin-console-without-login.md`
+and collect their wheels and the producer's shared/operations wheels in a local artifact
+directory. This repository's tests publish without an operator name, so with operations 0.2.6
+or earlier they fail with `TypeError`. To reproduce an earlier release, check out the design
+revision of its record (for `releases/2026-10-18-relax-team-registry.md`, design 859c87a) and
+follow that README.
+From a clean Python 3.12+ virtual environment, install those exact files and the test tools:
+
+```powershell
+python -m pip install <artifacts>/alerts_bi_shared-0.1.8-py3-none-any.whl <artifacts>/alerts_bi_operations-0.2.7-py3-none-any.whl <artifacts>/alerts_bi_admin-0.1.0-py3-none-any.whl <artifacts>/alerts_bi_portal-0.1.0-py3-none-any.whl pytest httpx
+$env:SQL_HOST = '127.0.0.1'
+$env:SQL_TEST_DATABASE = 'alerts_bi_test'
+$env:REQUIRE_SQL = '1'
+# Supply SQL_USER, SQL_PASSWORD and SQL_ENCRYPT for the local disposable SQL Server.
+python -m pytest tests/integration/test_team_routes.py -q -rs
+python scripts/check_contracts.py --console --sql
+```
+
+Run serially with no other test resetting `alerts_bi_test`. This targeted test needs SQL only,
+refuses a nonlocal server or another database name, and resets that disposable database.
+The release command sets `REQUIRE_SQL=1`. Any nonempty value other than `0` requires SQL,
+so values such as `true` or a mistyped value cannot silently skip. Every preflight failure,
+including bad credentials or unavailable SQL, fails the check instead of skipping. With the
+flag unset, empty or `0`, exploratory runs may skip a failed SQL preflight; schema or migration
+failures always fail. Release evidence must show an executed pass with no skips. The full
+coordinated suite uses `run_integration.py` above,
+which fails on missing infrastructure instead of allowing a skipped release gate.
+
+`check_docs.py` checks canonical syntax and navigation only. `check_contracts.py` verifies
+all SQL and revision-module SHA-256 entries against the installed admin artifact, plus API,
+registry and view contracts. Passing the former alone is not compatibility evidence. The
+`Checks` workflow (`.github/workflows/checks.yml`) runs `check_docs.py`, `ruff check .` and
+`ruff format --check scripts` on every push and pull request. There is currently no
+design-repository CI job provisioning both application artifacts and SQL; run this coordinated
+gate before delivery and record the exact revisions. Portal's own CI runs
+its standalone team-route regression tests against its pinned shared wheel on every PR.
 
 PR delivery is separate from deployment, merge and eventual repository archival.
 

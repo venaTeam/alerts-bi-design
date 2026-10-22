@@ -1,5 +1,23 @@
 # Alerts BI — Implementation Blueprint
 
+## Decisions page needs-a-decision view — accepted 2026-10-20
+
+Admin `queries.undecided_findings` splits each published finding's core rule ids, readiness
+gaps and raised model principle with `STRING_SPLIT` and keeps those with no `finding_decisions`
+row on that run; `GET /decisions` takes `view=needed|recorded` and renders both views with their
+counts. No migration, library or portal change. See design section "Decisions page lists
+findings that need a decision".
+
+## Operator console redesign — accepted 2026-10-19
+
+The admin console shows one week of a team at a time: a week picker replaces the run history
+table, and Run, Review and Publish steps replace the Overview/Findings/Decisions/Activity tabs.
+Run details, activity, the detailed analysis and the CSV downloads stay under a collapsed
+section. One New runs dialog replaces New run and Backfill weeks: one selected week becomes a
+manual run job, two to twelve weeks a backfill, each through its unchanged admission path.
+Execution, queues, publication and outputs are unchanged. See design section "Operator console
+redesign".
+
 ## Run output files removed — accepted 2026-10-17
 
 Remove `render_run_report` from manual HTTP/worker execution, orphan recovery and the weekly
@@ -63,6 +81,10 @@ Standalone CLI `report` must acquire the same lock before run-id/team lookup and
 through all file writes. Pause after SQL rendering but before writing to the configured
 output root: deletion must return 409, then succeed after reporting finishes without
 leaving recreated files. Verify both selection modes and lock release on write failure.
+Since 2026-10-20 deletion beside a worker job for another run goes ahead without the shared
+lock, locking that job's row (design section 7.12). Verify that a pending job and a paused
+running job leave another run deletable, still refuse their own run, and that the job then
+completes.
 
 ## Source ownership amendment — 2026-10-12
 
@@ -70,7 +92,7 @@ Admin owns execution, migrations, weekly jobs, registry and library builds under
 
 ## Unified operator service amendment — 2026-10-08
 
-The accepted consolidation in `alerts_bi_design.md` supersedes the separate trigger/admin web topology described below. `alerts-bi-admin serve` now provides authenticated Teams → team run history → selected run Overview/Findings/Decisions/Activity, alongside global Schedule and Decisions pages. The approved compact overview, split findings panel and action dialogs retain trigger/publish/withdraw/decide; detailed charts, SQL, filters and exports expand under run details. It reuses the existing SQL/reporting and review operations; portal, weekly scheduling, exact 168-hour windows, migration ownership and output payloads remain unchanged. JSON triggers require proxy identity and `X-CSRF-Token` from `/csrf`. Browser writes require same-site form CSRF. The admin repository owns UI source and vendors a pinned execution-runtime wheel; no sibling checkout or separate trigger listener is required. Deploy one admin console behind the existing operator login proxy; see `unified-console-deployment.md`. The old trigger factory remains a compatibility harness only.
+The accepted consolidation in `alerts_bi_design.md` supersedes the separate trigger/admin web topology described below. `alerts-bi-admin serve` now provides authenticated Teams → team run history → selected run Overview/Findings/Decisions/Activity, alongside global Schedule and Decisions pages. The approved compact overview, split findings panel and action dialogs retain trigger/publish/withdraw/decide; detailed charts, SQL, filters and exports expand under run details. It reuses the existing SQL/reporting and review operations; portal, weekly scheduling, exact 168-hour windows, migration ownership and output payloads remain unchanged. JSON triggers require proxy identity and `X-CSRF-Token` from `/csrf`. Browser writes require same-site form CSRF. The admin repository owns UI source and vendors a pinned execution-runtime wheel; no sibling checkout or separate trigger listener is required. Deploy one admin console behind the existing operator login proxy; see `unified-console-deployment.md`. The old trigger factory remains a compatibility harness only. **Amended 2026-10-19:** the console redesign replaces the run history and tabs with a week picker and Run, Review and Publish steps, and merges New run and Backfill weeks into New runs; see design section "Operator console redesign".
 
 Repository separation: use the [current source map](source-map.md) for package paths and application ownership. The behavior described below is unchanged.
 
@@ -132,11 +154,13 @@ Create `config/teams.json` and a checked-in JSON Schema. The versioned registry 
 - Optional Grafana panel-query definitions.
 - Registry version and effective date.
 
-Allow an empty v1 operator list for migrated teams and a nullable v2 operator for pre-migration teams, but require at least one source operator. Validate exact case-sensitive operator uniqueness across teams and missing required fields before a run starts. Store the declared version, complete-file SHA-256, and selected team entry as an immutable run snapshot. Include a mock registry populated from the existing generator's teams.
+Allow an empty v1 operator list for migrated teams and a nullable v2 operator for pre-migration teams, but require at least one source operator. Validate nonempty unique team IDs and missing required fields before a run starts. As amended 2026-10-18, accept repeated operators within v1 lists and across teams (including v1/v2 overlaps), and remove the team ID regex. Require IDs to fit 128 UTF-16 code units, with no surrounding whitespace, control characters or surrogates. Migration 017 preserves case-sensitive SQL team identity; shared 0.1.8 encodes non-slug IDs as single URL segments in admin and portal. Preserve supplied IDs and operator values exactly; operator matching remains case-sensitive. Store the declared version, complete-file SHA-256, and selected team entry as an immutable run snapshot. Include a mock registry populated from the existing generator's teams.
 
 ### 2.3 Elasticsearch reader
 
 Implement separate v1 and v2 queries using the selected team's operators and the exact run window. Support pagination so result size does not change correctness.
+
+Filter operators with a `terms` query on `operator.keyword`, not on `operator`. Production maps `operator` as analyzed `text` with a `keyword` subfield in both indices, so a filter on the analyzed field misses any operator containing an uppercase letter (design section 1.3, amended 2026-10-19). The scale probe's operator filter and the Kibana panels use the same subfield.
 
 Capture `run_at` once, use UTC throughout, and query the exact half-open interval from `run_at - 168 hours` through but excluding `run_at`. Assign rows to UTC calendar dates and persist exact boundaries and covered hours for partial first and last buckets.
 

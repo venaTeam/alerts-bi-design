@@ -1,5 +1,22 @@
 # Alerts BI — Runtime Flow
 
+## Decisions page needs-a-decision view — accepted 2026-10-20
+
+The global Decisions page opens on the findings of currently published weeks that have no
+decision for that week, across teams, newest week first; `view=recorded` shows the recorded
+decisions. It only reads; recording a decision, publication and withdrawal are unchanged. See
+design section "Decisions page lists findings that need a decision".
+
+## Operator console redesign — accepted 2026-10-19
+
+The admin console shows one week of a team at a time: a week picker replaces the run history
+table, and Run, Review and Publish steps replace the Overview/Findings/Decisions/Activity tabs.
+Run details, activity, the detailed analysis and the CSV downloads stay under a collapsed
+section. One New runs dialog replaces New run and Backfill weeks: one selected week becomes a
+manual run job, two to twelve weeks a backfill, each through its unchanged admission path.
+Execution, queues, publication and outputs are unchanged. See design section "Operator console
+redesign".
+
 ## Run output files removed — accepted 2026-10-17
 
 Manual, worker, recovered and weekly runs persist to SQL and write no files. CSV downloads
@@ -50,8 +67,9 @@ latest completed Monday. The start is the previous Monday at 00:00 UTC, inclusiv
 end is exclusive. Historical arbitrary-window analysis remains renderable. Admin removes
 the publication gap override and rejects forged overrides. Permanent run deletion removes
 SQL run-owned rows transactionally (including decisions in a scoped deletion allowance, with
-migration 009 and a checked parent foreign key). Since 2026-10-17 runs write no report files to clean. Shared caches remain. Active work is
-refused; scheduler enrollment remains. See design section 7.12 and decision 004 for scope,
+migration 009 and a checked parent foreign key). Since 2026-10-17 runs write no report files to clean. Shared caches remain. Active work on
+the run itself is refused; since 2026-10-20 a worker job for another run does not block it.
+Scheduler enrollment remains. See design section 7.12 and decision 004 for scope,
 failure handling and the explicit exception to retained audit history.
 
 Manual HTTP/API and CLI runs share the existing SQL session execution lock with weekly
@@ -66,7 +84,7 @@ Admin owns execution, migrations, weekly jobs, registry and library builds under
 
 ## Unified operator service amendment — 2026-10-08
 
-The accepted consolidation in `alerts_bi_design.md` supersedes the separate trigger/admin web topology described below. `alerts-bi-admin serve` now provides authenticated Teams → team run history → selected run Overview/Findings/Decisions/Activity, alongside global Schedule and Decisions pages. The approved compact overview, split findings panel and action dialogs retain trigger/publish/withdraw/decide; detailed charts, SQL, filters and exports expand under run details. It reuses the existing SQL/reporting and review operations; portal, weekly scheduling, exact 168-hour windows, migration ownership and output payloads remain unchanged. JSON triggers require proxy identity and `X-CSRF-Token` from `/csrf`. Browser writes require same-site form CSRF. The admin repository owns UI source and vendors a pinned execution-runtime wheel; no sibling checkout or separate trigger listener is required. Deploy one admin console behind the existing operator login proxy; see `unified-console-deployment.md`. The old trigger factory remains a compatibility harness only.
+The accepted consolidation in `alerts_bi_design.md` supersedes the separate trigger/admin web topology described below. `alerts-bi-admin serve` now provides authenticated Teams → team run history → selected run Overview/Findings/Decisions/Activity, alongside global Schedule and Decisions pages. The approved compact overview, split findings panel and action dialogs retain trigger/publish/withdraw/decide; detailed charts, SQL, filters and exports expand under run details. It reuses the existing SQL/reporting and review operations; portal, weekly scheduling, exact 168-hour windows, migration ownership and output payloads remain unchanged. JSON triggers require proxy identity and `X-CSRF-Token` from `/csrf`. Browser writes require same-site form CSRF. The admin repository owns UI source and vendors a pinned execution-runtime wheel; no sibling checkout or separate trigger listener is required. Deploy one admin console behind the existing operator login proxy; see `unified-console-deployment.md`. The old trigger factory remains a compatibility harness only. **Amended 2026-10-19:** the console redesign replaces the run history and tabs with a week picker and Run, Review and Publish steps, and merges New run and Backfill weeks into New runs; see design section "Operator console redesign".
 
 Repository separation: use the [current source map](source-map.md) for package paths and application ownership. The behavior described below is unchanged.
 
@@ -84,7 +102,7 @@ At startup, the tool:
 
 A run never scans every team. Cross-team comparison is outside the MVP.
 
-The registry is validated before any query. V1 operator lists may be empty after migration and the v2 operator may be absent before migration, but the selected entry must contain at least one source operator and no exact operator may belong to two teams. The run stores the registry version, complete-file hash, and an immutable snapshot of the selected entry.
+The registry is validated before any query. V1 operator lists may be empty after migration and the v2 operator may be absent before migration, but the selected entry must contain at least one source operator and team IDs must be nonempty and unique. As amended 2026-10-18, operator values may repeat within and across entries, and team IDs have no regex restriction. Require IDs to fit 128 UTF-16 code units, with no surrounding whitespace, control characters or surrogates. Migration 017 preserves case-sensitive SQL team identity; shared 0.1.8 encodes non-slug IDs as single URL segments in admin and portal. Matching remains exact and case-sensitive; each selected team independently queries its own operators. The run stores the registry version, complete-file hash, and an immutable snapshot of the selected entry.
 
 ## 2. Read the selected team's alerts
 
@@ -92,6 +110,8 @@ The tool queries Elasticsearch directly:
 
 - `appchi-v1`: alerts in the run window whose `operator` is one of the team's configured v1 operators.
 - `appchi-v2`: alerts in the run window whose `operator` equals the team's configured v2 operator.
+
+Both filters compare exactly and case-sensitively against `operator.keyword`. Production maps `operator` as analyzed `text` with a `keyword` subfield in both indices, and the mock mirrors that mapping (design section 1.3, amended 2026-10-19); the analyzed `operator` field is never used for matching.
 
 The queries do not restrict `application`, apply Grafana panel filters, read the SQL hot table, or sweep alerts belonging to other teams.
 

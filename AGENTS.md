@@ -14,7 +14,7 @@ Canonical product design, contracts, accepted decisions, and coordinated release
 
 ### Verification
 
-- docs: `["uv", "run", "python", "scripts/check_docs.py"]` in `.` (observed; scripts/check_docs.py; validation result recorded in releases/).
+- docs: `["poetry", "run", "python", "scripts/check_docs.py"]` in `.` (observed; scripts/check_docs.py; validation result recorded in releases/).
 
 ### Project invariants
 
@@ -24,7 +24,7 @@ Canonical product design, contracts, accepted decisions, and coordinated release
 - The supported local workspace contains design, admin and portal only. Do not require or recreate an alerts-bi-runs checkout for setup or development. Admin owns its former tooling; consult docs/runs-retirement.md for local recovery and the separate operational cutover.
 - If a parent AGENTS.md exists in a multi-repository workspace, read it explicitly for routing. The repository remains buildable and understandable without it. Parent instructions never become a runtime dependency.
 - Inspect local changes before edits, preserve others work, and keep KeepHQ excluded. Do not install GitHub or Figma plugins. Use the selected main model.
-- Use Python 3.12+, committed uv.lock, pytest, ruff and strict mypy. SQLAlchemy Core with pymssql targets real SQL Server; never SQLite or an in-memory integration substitute. No Node.js build/test dependency.
+- Use Python 3.12+, Poetry 2.3.1, committed poetry.lock, pytest, ruff and strict mypy. SQLAlchemy Core with pymssql targets real SQL Server; never SQLite or an in-memory integration substitute. No Node.js build/test dependency.
 - Keep one selected team per run, app+key identity, exact UTC windows, separate v1/v2 counts and SQL-only output rendering. Preserve R6 episode boundaries, suppression safety, LLM audit/retry behavior, prompt text, and deterministic identifiers.
 - Do not edit applied SQL/revision files or regenerate the hand-authored expected-results oracle. Admin owns the sole migration chain. Changes to immutable prompt/catalog/instant formats require their approved version process.
 - No secrets, alert documents or complete model payloads in normal logs or commits. Use environment settings and placeholders. Read deployment credentials only for the authorized task.
