@@ -18,6 +18,7 @@ now live under admin's `src/engine`; the installed namespace is `alerts_bi_admin
 | portal | src | GET-only published views and reader pages |
 | portal | deploy/openshift | OpenShift runbook, Template and value file for the portal |
 | design | docs, decisions, contracts, releases | Requirements and compatibility evidence |
+| design | .claude/skills/import-github-zips | Private-network import of GitHub ZIPs ([process](private-network-import.md)) |
 
 Supported executables are `alerts-bi-admin` and `alerts-bi-portal`. Admin is independently
 buildable using its committed Poetry lock; portal pins an immutable shared wheel produced by

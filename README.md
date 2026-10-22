@@ -78,3 +78,6 @@ gate before delivery and record the exact revisions. Portal's own CI runs
 its standalone team-route regression tests against its pinned shared wheel on every PR.
 
 PR delivery is separate from deployment, merge and eventual repository archival.
+
+Code reaches the private network as GitHub ZIP downloads; `docs/private-network-import.md`
+explains each delivery and the `import-github-zips` skill that imports them there.
