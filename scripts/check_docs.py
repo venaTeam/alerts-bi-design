@@ -58,6 +58,13 @@ def main() -> None:
         "docs/async-runs.md",
         "docs/backfill.md",
         "decisions/001-repository-separation.md",
+        "docs/private-network-import.md",
+        ".claude/skills/import-github-zips/SKILL.md",
+        ".claude/skills/import-github-zips/references/first-run.md",
+        ".claude/skills/import-github-zips/references/merge-request.md",
+        ".claude/skills/import-github-zips/scripts/github_import.py",
+        "changes/README.md",
+        "changes/notes.py",
     ):
         assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))

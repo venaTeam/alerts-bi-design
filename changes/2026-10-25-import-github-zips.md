@@ -6,8 +6,10 @@ Branch: feat/import-github-zips
 
 Adds the `import-github-zips` skill, which imports admin, portal and design into the private
 network from GitHub ZIPs and opens one GitLab merge request per repository, and
-`docs/private-network-import.md`, which describes the process. Adds `changes/`: every pull
-request now leaves a note for that import, drafted by `changes/notes.py new` and checked in CI.
+`docs/private-network-import.md`, which describes the process. Imports record
+`.github-import.json`, so a squashed, rebased or reverted import is detected and recorded again
+with `baseline --reset`. Adds `changes/`: every pull request now leaves a note for that import,
+drafted by `changes/notes.py new` and checked in CI. `tests/unit` covers both scripts.
 
 ## Deploy
 
@@ -21,5 +23,7 @@ request now leaves a note for that import, drafted by `changes/notes.py new` and
 ## Private network
 
 - Dockerfile: no change
-- CI: changed (.github/workflows/checks.yml): adds the change-note job. GitHub-only, do not port.
+- CI: changed (.github/workflows/checks.yml): adds the change-note job (GitHub-only, do not
+  port) and runs ruff format, strict mypy and pytest on `changes/`, the skill's script and
+  `tests/unit`; port those three if GitLab CI runs design's checks.
 - Packages: none

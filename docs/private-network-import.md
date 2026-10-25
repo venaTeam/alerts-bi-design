@@ -42,7 +42,20 @@ compares both sides against the previous import:
   writing GitHub's Dockerfile change with the private sources.
 
 The snapshot reaches `main` through the merge commit, and the next import starts from it. A
-squashed or rebased merge request removes it. The next import then asks for a new baseline.
+squashed or rebased merge request removes it. Each import also writes `.github-import.json`, a
+private-only file that names the snapshot `main` should contain; it survives a squash or a
+revert. When the file and the history disagree, the next import stops and asks for a ZIP of the
+commit `main` really contains, and records it again (`baseline --reset`).
+
+Set each private GitLab project's merge method to **Merge commit** and its squash option to
+**Do not allow**, so that nobody squashes an import by accident.
+
+## Rolling back
+
+Roll back a bad release by redeploying the previous image. Do not revert the import on `main`:
+the next import would then stop until the commit `main` contains is recorded again. If a
+revert is unavoidable, bring a ZIP of the GitHub commit `main` contains after it with the next
+delivery.
 
 ## Change notes
 

@@ -20,7 +20,13 @@ jobs:
       # (check_contracts.py, run_integration.py) need app artifacts and SQL; see README.
       - run: poetry run python scripts/check_docs.py
       - run: poetry run ruff check .
-      - run: poetry run ruff format --check scripts
+      - run: poetry run ruff format --check scripts changes .claude/skills tests/unit
+      # The import skill's script, the change-note script and their tests (temporary git
+      # repositories and synthetic ZIPs; no services).
+      - run: >-
+          poetry run mypy --strict changes/notes.py
+          .claude/skills/import-github-zips/scripts/github_import.py tests/unit
+      - run: poetry run pytest tests/unit -q
   change-note:
     # Every pull request adds a complete change note (changes/README.md). GitHub-only: the
     # private network imports merged code and does not port this check to GitLab CI.

@@ -4,16 +4,20 @@ A GitHub ZIP has no history; its archive comment holds the commit it was made fr
 import commits a ZIP byte for byte as a snapshot commit whose parent is the previously
 imported snapshot, then merges that snapshot into a new branch made from the clone's main
 branch. Git can then tell what GitHub changed since the last import from what the private
-network changed on its own.
+network changed on its own. Every baseline and import merge also writes .github-import.json,
+which names the snapshot main should contain; it survives a squash or a revert, so a lost or
+reverted snapshot is detected instead of silently becoming the next base.
 
 Commands (each prints one JSON object; exit status 2 means stop, and "error" says why):
 
   inspect  ZIP...                                   identify archives
   status   --repo CLONE --repository NAME           last imported GitHub commit
-  baseline --repo CLONE --zip ZIP [--branch B --confirm]
-                                                    first run: record what main already contains
-  import   --repo CLONE --zip ZIP --branch B [--full]
+  baseline --repo CLONE --zip ZIP [--branch B --confirm] [--reset]
+                                                    record what main already contains
+  import   --repo CLONE --zip ZIP --branch B [--full] [--confirm-newer]
                                                     merge the ZIP into a new branch
+  verify   --repo CLONE --repository NAME           after the merge commit: only private
+                                                    paths differ from GitHub's snapshot
 
 Python 3.9+ and git only. Nothing here touches the network.
 """
@@ -37,11 +41,20 @@ from typing import Any
 SNAPSHOT_TRAILER = "GitHub-Commit"
 REPOSITORY_TRAILER = "GitHub-Repository"
 TIME_TRAILER = "GitHub-Commit-Time"
+KIND_TRAILER = "GitHub-Snapshot-Kind"
+BASELINE_TRAILER = "GitHub-Baseline"
 TEMP_REF = "refs/github-import/tmp"
+#: Private-only record of the snapshot main contains; written by every baseline and import.
+STATE_FILE = ".github-import.json"
 #: Categories reported as counts only (their paths with --full).
 COUNT_ONLY = ("code", "tests", "docs")
+#: Categories the private network adapts; they may differ from GitHub's snapshot.
+ADAPTED = ("container", "ci", "agent-instructions")
 #: Differences listed in full by `baseline`; more are counted.
 LIST_LIMIT = 50
+#: Far above the repositories' size; a ZIP beyond this did not come from them.
+MAX_ENTRIES = 50_000
+MAX_BYTES = 1 << 30
 HEX = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 ENV_KEY = re.compile(rb"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", re.MULTILINE)
 
@@ -85,6 +98,10 @@ def current_branch(repo: Path) -> str | None:
     return name or None
 
 
+def branch_exists(repo: Path, branch: str) -> bool:
+    return git_ok(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+
+
 def worktree_state(repo: Path) -> dict[str, Any]:
     dirty = git_text(repo, "status", "--porcelain")
     return {
@@ -123,6 +140,8 @@ class Archive:
         except (OSError, zipfile.BadZipFile) as error:
             raise Stop(f"{path} is not a readable ZIP: {error}") from error
         infos = self.zip.infolist()
+        if len(infos) > MAX_ENTRIES or sum(info.file_size for info in infos) > MAX_BYTES:
+            raise Stop(f"{path.name} is far larger than these repositories; refusing it.")
         tops = {info.filename.split("/", 1)[0] for info in infos}
         if len(tops) != 1:
             raise Stop(
@@ -147,6 +166,11 @@ class Archive:
             if not inner or info.is_dir():
                 continue
             check_path(inner, path.name)
+            if stat.S_ISLNK(info.external_attr >> 16):
+                raise Stop(
+                    f"{path.name}: {inner} is a symbolic link. GitHub ZIPs contain none, so this "
+                    "ZIP was not downloaded from GitHub; refusing it."
+                )
             self.entries.append((inner, git_mode(info), info))
             if self.commit_time is None:
                 self.commit_time = extended_mtime(info.extra)
@@ -157,11 +181,12 @@ class Archive:
             raise Stop(f"{path.name} has paths that differ only by case; import it by hand.")
 
     def _repository(self, explicit: str | None) -> str | None:
+        ref = r"-(?:main|master|[0-9a-f]{7,64})"
         if explicit:
-            if self.prefix != explicit and not self.prefix.startswith(explicit + "-"):
+            if self.prefix != explicit and not re.fullmatch(re.escape(explicit) + ref, self.prefix):
                 raise Stop(f"{self.path.name} holds {self.prefix}/, not repository {explicit}.")
             return explicit
-        match = re.fullmatch(r"(.+?)-(?:main|master|[0-9a-f]{7,64})", self.prefix)
+        match = re.fullmatch(r"(.+?)" + ref, self.prefix)
         return match.group(1) if match else None
 
     def require(self) -> tuple[str, str]:
@@ -197,18 +222,15 @@ def check_path(inner: str, archive: str) -> None:
         or inner.startswith("/")
         or any(part in ("", ".", "..") for part in inner.split("/"))
         or any(part.lower() == ".git" for part in parts)
+        or inner == STATE_FILE
     )
     if bad:
         raise Stop(f"{archive}: unsafe path {inner!r}; refusing the archive.")
 
 
 def git_mode(info: zipfile.ZipInfo) -> str:
-    unix = info.external_attr >> 16  # GitHub leaves this 0, so files become 100644
-    if stat.S_ISLNK(unix):
-        return "120000"
-    if unix & 0o111:
-        return "100755"
-    return "100644"
+    # GitHub leaves the Unix mode 0, so its files become 100644.
+    return "100755" if (info.external_attr >> 16) & 0o111 else "100644"
 
 
 def extended_mtime(extra: bytes) -> int | None:
@@ -244,7 +266,7 @@ def trailers(message: str) -> dict[str, str]:
 
 
 def imported_snapshots(repo: Path, rev: str, repository: str) -> list[dict[str, Any]]:
-    """Snapshot commits of `repository` reachable from `rev`, newest chain tip first."""
+    """Snapshot commits of `repository` reachable from `rev`."""
     raw = git(repo, "log", f"--grep=^{SNAPSHOT_TRAILER}: ", "--format=%H%x00%P%x00%B%x1e", rev)
     snapshots = []
     for record in raw.decode("utf-8", "replace").split("\x1e"):
@@ -262,6 +284,7 @@ def imported_snapshots(repo: Path, rev: str, repository: str) -> list[dict[str, 
                 "parents": parents.split(),
                 "github_commit": found[SNAPSHOT_TRAILER],
                 "github_commit_time": int(time_value) if time_value.isdigit() else None,
+                "kind": found.get(KIND_TRAILER, "baseline" if not parents else "import"),
             }
         )
     return snapshots
@@ -278,6 +301,7 @@ def recorded_repositories(repo: Path, rev: str) -> set[str]:
 def last_import(
     repo: Path, rev: str, repository: str
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """The tip of the snapshot chain reachable from `rev`, and the chain back to its baseline."""
     snapshots = imported_snapshots(repo, rev, repository)
     if not snapshots:
         return None, []
@@ -288,9 +312,72 @@ def last_import(
         raise Stop(
             f"{rev} contains {len(tips)} separate import chains for {repository} ({listed}). "
             "Two imports were probably merged from the same base. Ask the user which GitHub "
-            "commit main really contains, then record it with `baseline` on a fresh branch."
+            "commit main really contains, then record it again with `baseline --reset` "
+            "(references/first-run.md)."
         )
-    return tips[0], snapshots
+    by_sha = {snap["snapshot"]: snap for snap in snapshots}
+    chain = [tips[0]]
+    while chain[-1]["kind"] != "baseline":
+        parent = next((p for p in chain[-1]["parents"] if p in by_sha), None)
+        if parent is None:
+            break
+        chain.append(by_sha[parent])
+    return tips[0], chain
+
+
+def read_state(repo: Path, rev: str) -> dict[str, Any] | None:
+    raw = blob(repo, rev, STATE_FILE)
+    if raw is None:
+        return None
+    try:
+        state = json.loads(raw)
+    except ValueError as error:
+        raise Stop(f"{STATE_FILE} in {rev} is not valid JSON: {error}") from error
+    return state if isinstance(state, dict) else None
+
+
+def state_problem(
+    repo: Path, rev: str, repository: str, tip: dict[str, Any] | None
+) -> dict[str, str] | None:
+    """Why main's recorded state and its snapshot history disagree, and the commit to re-record."""
+    state = read_state(repo, rev)
+    if state is not None and state.get("repository") != repository:
+        raise Stop(f"{STATE_FILE} records {state.get('repository')}, not {repository}.")
+    if tip is None and state is None:
+        return None
+    if tip is not None and state is None:
+        return {
+            "reason": f"{STATE_FILE} is missing from main although imports are recorded.",
+            "github_commit": "",
+        }
+    assert state is not None
+    recorded = str(state.get("github_commit", ""))
+    if tip is not None and state.get("snapshot") == tip["snapshot"]:
+        return None
+    reachable = {snap["snapshot"] for snap in imported_snapshots(repo, rev, repository)}
+    if state.get("snapshot") not in reachable:
+        reason = (
+            f"main contains GitHub {recorded[:12]} according to {STATE_FILE}, but that import's "
+            "snapshot is not in main's history: its merge request was squashed or rebased."
+        )
+    else:
+        reason = (
+            f"main contains GitHub {recorded[:12]} according to {STATE_FILE}, but the newer "
+            f"import of {tip['github_commit'][:12] if tip else '?'} is still in main's history: "
+            "that import was reverted."
+        )
+    return {"reason": reason, "github_commit": recorded}
+
+
+def require_consistent(repo: Path, rev: str, repository: str, tip: dict[str, Any] | None) -> None:
+    problem = state_problem(repo, rev, repository, tip)
+    if problem:
+        needed = problem["github_commit"] or "the GitHub commit main contains (ask the user)"
+        raise Stop(
+            f"{problem['reason']} The next import would compare against the wrong base. Record "
+            f"the base again with `baseline --reset` and the ZIP of {needed} "
+            "(references/first-run.md)."
+        )
 
 
 def quote_path(path: str) -> bytes:
@@ -308,7 +395,7 @@ def quote_path(path: str) -> bytes:
     return bytes(out + b'"')
 
 
-def write_snapshot(repo: Path, archive: Archive, parent: str | None) -> str:
+def write_snapshot(repo: Path, archive: Archive, parent: str | None, kind: str) -> str:
     """Commit the ZIP contents exactly, without touching the index or working tree."""
     repository, commit = archive.require()
     ident = git_text(repo, "var", "GIT_COMMITTER_IDENT")
@@ -320,6 +407,7 @@ def write_snapshot(repo: Path, archive: Archive, parent: str | None) -> str:
         "",
         f"{REPOSITORY_TRAILER}: {repository}",
         f"{SNAPSHOT_TRAILER}: {commit}",
+        f"{KIND_TRAILER}: {kind}",
     ]
     if archive.commit_time is not None:
         lines.append(f"{TIME_TRAILER}: {archive.commit_time}")
@@ -359,6 +447,18 @@ def verify_snapshot(repo: Path, snapshot: str, archive: Archive) -> None:
         raise Stop(f"Snapshot {snapshot[:12]} does not match the ZIP byte for byte ({missing}).")
 
 
+def write_state(repo: Path, repository: str, commit: str, snapshot: str) -> None:
+    """Record, in the merge being prepared, which snapshot main will contain."""
+    state = {
+        "repository": repository,
+        "github_commit": commit,
+        "snapshot": snapshot,
+        "note": "Written by the import-github-zips skill on every import. Never edit it.",
+    }
+    Path(repo, STATE_FILE).write_bytes((json.dumps(state, indent=2) + "\n").encode("utf-8"))
+    git(repo, "add", "--", STATE_FILE)
+
+
 # --------------------------------------------------------------------------- change reports
 
 
@@ -366,7 +466,11 @@ def category(path: str) -> str:
     """What a changed path means for the private network."""
     name = path.rsplit("/", 1)[-1]
     first = path.split("/", 1)[0]
-    if name in ("Dockerfile", "Containerfile", ".dockerignore") or name.endswith(".Dockerfile"):
+    if (
+        name.startswith(("Dockerfile", "Containerfile"))
+        or name.endswith(".Dockerfile")
+        or name == ".dockerignore"
+    ):
         return "container"
     if first in (".github", ".gitlab") or name == ".gitlab-ci.yml":
         return "ci"
@@ -411,7 +515,8 @@ def name_status(repo: Path, old: str, new: str) -> list[dict[str, str]]:
         entry["path"] = parts[index].decode("utf-8", "surrogateescape")
         index += 1
         entry["category"] = category(entry["path"])
-        entries.append(entry)
+        if entry["path"] != STATE_FILE:
+            entries.append(entry)
     return entries
 
 
@@ -492,17 +597,20 @@ def cmd_inspect(args: argparse.Namespace) -> None:
 def cmd_status(args: argparse.Namespace) -> None:
     repo = clone(args.repo)
     target = resolve(repo, args.target)
-    tip, snapshots = last_import(repo, target, args.repository)
+    tip, chain = last_import(repo, target, args.repository)
     payload = {"repository": args.repository, "target": args.target, "target_commit": target}
     payload.update(worktree_state(repo))
-    payload["needs_baseline"] = tip is None
+    problem = state_problem(repo, target, args.repository, tip)
+    payload["needs_baseline"] = tip is None and problem is None
+    if problem:
+        payload["needs_recovery"] = problem
     if tip:
         payload["last_import"] = {
             "github_commit": tip["github_commit"],
             "github_commit_time": iso(tip["github_commit_time"]),
             "snapshot": tip["snapshot"],
         }
-        payload["imports_in_history"] = len(snapshots)
+        payload["imports_since_baseline"] = len(chain) - 1
     emit(payload)
 
 
@@ -513,12 +621,39 @@ def protected_branch(branch: str, target: str) -> None:
         )
 
 
-def start_branch(repo: Path, branch: str, target: str) -> None:
+def start_branch(repo: Path, branch: str, target: str) -> str | None:
+    """Create `branch` from `target` and switch to it; returns the branch to go back to."""
     protected_branch(branch, target)
-    if git_ok(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"):
+    if branch_exists(repo, branch):
         raise Stop(f"Branch {branch} already exists. Use a new branch name for every import.")
     require_clean(repo)
+    previous = current_branch(repo)
     git(repo, "checkout", "--quiet", "--no-track", "-b", branch, target)
+    return previous
+
+
+def remove_branch(repo: Path, branch: str, previous: str | None, target: str) -> None:
+    """Undo `start_branch` after a failure, so a retry is not refused as an existing branch."""
+    git(repo, "merge", "--abort", check=False)
+    git(repo, "reset", "--quiet", "--hard", check=False)
+    if previous and previous != branch:
+        git(repo, "checkout", "--quiet", previous, check=False)
+    else:
+        git(repo, "checkout", "--quiet", "--detach", target, check=False)
+    git(repo, "branch", "-D", branch, check=False)
+
+
+def is_fresh_baseline(repo: Path, repository: str, target: str) -> bool:
+    """HEAD is the merge that `baseline --confirm` just made on top of the target."""
+    found = trailers(git_text(repo, "log", "-1", "--format=%B", "HEAD"))
+    parents = git_text(repo, "log", "-1", "--format=%P", "HEAD").split()
+    return (
+        found.get(REPOSITORY_TRAILER) == repository
+        and BASELINE_TRAILER in found
+        and len(parents) == 2
+        and git_ok(repo, "merge-base", "--is-ancestor", parents[0], target)
+        and git_text(repo, "diff", "--name-only", parents[0], "HEAD") == STATE_FILE
+    )
 
 
 def cmd_baseline(args: argparse.Namespace) -> None:
@@ -527,15 +662,21 @@ def cmd_baseline(args: argparse.Namespace) -> None:
     repository, commit = archive.require()
     target = resolve(repo, args.target)
     tip, _ = last_import(repo, target, repository)
-    if tip:
+    state = read_state(repo, target)
+    if (tip or state) and not args.reset:
         raise Stop(
-            f"{args.target} already records GitHub {tip['github_commit'][:12]} for {repository}. "
-            "A baseline is only for the first import; use `import`."
+            f"{args.target} already records imports of {repository}. Use `import`; after a "
+            "squashed, rebased or reverted import use `baseline --reset` (references/first-run.md)."
+        )
+    if args.reset and state and state.get("github_commit") != commit:
+        raise Stop(
+            f"main contains GitHub {str(state.get('github_commit'))[:12]} according to "
+            f"{STATE_FILE}; record the ZIP of that commit, not {commit[:12]}."
         )
     others = recorded_repositories(repo, target) - {repository}
     if others:
         raise Stop(f"This clone records imports of {', '.join(sorted(others))}, not {repository}.")
-    snapshot = write_snapshot(repo, archive, None)
+    snapshot = write_snapshot(repo, archive, tip["snapshot"] if tip else None, "baseline")
     differences = name_status(repo, snapshot, target)
     expected = [entry for entry in differences if entry["category"] in ("container", "ci")]
     unexpected = [entry for entry in differences if entry["category"] not in ("container", "ci")]
@@ -557,26 +698,26 @@ def cmd_baseline(args: argparse.Namespace) -> None:
     if args.confirm:
         if not args.branch:
             raise Stop("--confirm needs --branch.")
-        start_branch(repo, args.branch, target)
-        message = (
-            f"Record GitHub {repository}@{commit[:12]} as the imported baseline\n\n"
-            "Keeps every private file unchanged. Later imports compare GitHub against this "
-            "snapshot.\n\n"
-            f"{REPOSITORY_TRAILER}: {repository}\n"
-            f"GitHub-Baseline: {commit}\n"
-        )
-        git(
-            repo,
-            "merge",
-            "--quiet",
-            "--no-ff",
-            "--allow-unrelated-histories",
-            "-s",
-            "ours",
-            "-m",
-            message,
-            snapshot,
-        )
+        previous = start_branch(repo, args.branch, target)
+        try:
+            message = (
+                f"Record GitHub {repository}@{commit[:12]} as the imported baseline\n\n"
+                "Keeps every private file unchanged. Later imports compare GitHub against this "
+                "snapshot.\n\n"
+                f"{REPOSITORY_TRAILER}: {repository}\n"
+                f"{BASELINE_TRAILER}: {commit}\n"
+            )
+            merge = ["merge", "--quiet", "--no-ff", "--no-commit", "-s", "ours", "-m", message]
+            if tip is None:
+                merge.append("--allow-unrelated-histories")
+            git(repo, *merge, snapshot)
+            write_state(repo, repository, commit, snapshot)
+            git(repo, "commit", "--quiet", "--no-edit")
+        except Stop as stop:
+            remove_branch(repo, args.branch, previous, target)
+            raise Stop(
+                f"{stop} Branch {args.branch} was removed; fix the cause and retry."
+            ) from stop
         payload.update(
             {
                 "recorded": True,
@@ -593,17 +734,16 @@ def cmd_import(args: argparse.Namespace) -> None:
     repository, commit = archive.require()
     target = resolve(repo, args.target)
     protected_branch(args.branch, args.target)
-    # Continue only on a branch that `baseline --confirm` just made and that main lacks.
-    continuing = current_branch(repo) == args.branch and not git_ok(
-        repo, "merge-base", "--is-ancestor", "HEAD", target
-    )
+    continuing = current_branch(repo) == args.branch and is_fresh_baseline(repo, repository, target)
     require_clean(repo)
-    if not continuing and git_ok(
-        repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{args.branch}"
-    ):
-        raise Stop(f"Branch {args.branch} already exists. Use a new branch name for every import.")
+    if not continuing and branch_exists(repo, args.branch):
+        raise Stop(
+            f"Branch {args.branch} already exists. Use a new branch name for every import; only "
+            "a branch that `baseline --confirm` just created can be continued."
+        )
     start = "HEAD" if continuing else target
-    tip, snapshots = last_import(repo, start, repository)
+    tip, chain = last_import(repo, start, repository)
+    require_consistent(repo, start, repository, tip)
     if tip is None:
         others = recorded_repositories(repo, start) - {repository}
         if others:
@@ -618,25 +758,48 @@ def cmd_import(args: argparse.Namespace) -> None:
     if tip["github_commit"] == commit:
         emit({"repository": repository, "up_to_date": True, "github_commit": commit})
         return
-    if any(snap["github_commit"] == commit for snap in snapshots):
+    if any(snap["github_commit"] == commit for snap in chain):
         raise Stop(
             f"GitHub {commit[:12]} was imported before {tip['github_commit'][:12]}; this ZIP is older."
         )
-    if (
-        archive.commit_time
-        and tip["github_commit_time"]
-        and archive.commit_time < tip["github_commit_time"]
-    ):
+    if archive.commit_time is None or tip["github_commit_time"] is None:
+        if not args.confirm_newer:
+            raise Stop(
+                f"Cannot tell from commit times whether GitHub {commit[:12]} is newer than the last "
+                f"import {tip['github_commit'][:12]} (a repacked ZIP has none). Ask the user; if "
+                "they confirm it is newer, rerun with --confirm-newer and say so in the merge "
+                "request."
+            )
+    elif archive.commit_time < tip["github_commit_time"]:
         raise Stop(
             f"This ZIP ({iso(archive.commit_time)}) is older than the last import "
             f"{tip['github_commit'][:12]} ({iso(tip['github_commit_time'])})."
         )
     base = tip["snapshot"]
-    snapshot = write_snapshot(repo, archive, base)
-    if not continuing:
-        start_branch(repo, args.branch, target)
+    snapshot = write_snapshot(repo, archive, base, "import")
+    previous = None if continuing else start_branch(repo, args.branch, target)
+    try:
+        payload = merge_import(repo, args, repository, archive, tip, snapshot)
+    except Stop as stop:
+        if continuing:
+            git(repo, "merge", "--abort", check=False)
+            raise
+        remove_branch(repo, args.branch, previous, target)
+        raise Stop(f"{stop} Branch {args.branch} was removed; fix the cause and retry.") from stop
+    emit(payload)
+
+
+def merge_import(
+    repo: Path,
+    args: argparse.Namespace,
+    repository: str,
+    archive: Archive,
+    tip: dict[str, Any],
+    snapshot: str,
+) -> dict[str, Any]:
+    base = tip["snapshot"]
     private_head = git_text(repo, "rev-parse", "HEAD")
-    old, new = tip["github_commit"], commit
+    old, new = tip["github_commit"], archive.require()[1]
     compare = f"https://github.com/{args.github_owner}/{repository}/compare/{old[:12]}...{new[:12]}"
     message = (
         f"Import GitHub {repository} {old[:8]}..{new[:8]}\n\n"
@@ -659,47 +822,82 @@ def cmd_import(args: argparse.Namespace) -> None:
     )
     if merge.returncode != 0 and not conflicts:
         raise Stop("git merge failed: " + merge.stderr.decode("utf-8", "replace").strip())
+    write_state(repo, repository, new, snapshot)
     merge_msg = Path(repo, git_text(repo, "rev-parse", "--git-path", "MERGE_MSG"))
     merge_msg.write_bytes(message.encode("utf-8"))
     github_changes = name_status(repo, base, snapshot)
     private_changes = name_status(repo, base, private_head)
     both = sorted(touched(github_changes) & touched(private_changes))
+    return {
+        "repository": repository,
+        "branch": args.branch,
+        "target": args.target,
+        "up_to_date": False,
+        "github": {
+            "from": old,
+            "to": new,
+            "to_time": iso(archive.commit_time),
+            "compare": compare,
+        },
+        "base_snapshot": base,
+        "snapshot": snapshot,
+        "change_notes": [
+            entry["path"]
+            for entry in github_changes
+            if entry["category"] == "change-notes" and entry["status"] != "D"
+        ],
+        "conflicts": conflicts,
+        "review_auto_merged": [path for path in both if path not in conflicts],
+        "github_changes": grouped(github_changes, args.full),
+        "private_changes": private_changes,
+        "environment_keys": environment_keys(repo, base, snapshot, github_changes),
+        "new_migration_files": [
+            entry["path"]
+            for entry in github_changes
+            if entry["category"] == "migrations" and entry["status"] == "A"
+        ],
+        "next": (
+            "Resolve the conflicts, review, then `git add` and `git commit --no-edit`."
+            if conflicts
+            else "Review, then `git commit --no-edit`."
+        )
+        + f" Afterwards run `verify --repo <clone> --repository {repository}`.",
+    }
+
+
+def cmd_verify(args: argparse.Namespace) -> None:
+    """Fail unless HEAD equals the imported snapshot outside the private network's own paths."""
+    repo = clone(args.repo)
+    target = resolve(repo, args.target)
+    state = worktree_state(repo)
+    if state["merge_in_progress"] or not state["clean"]:
+        raise Stop("Commit the import merge first (`git commit --no-edit`), then run verify.")
+    tip, chain = last_import(repo, "HEAD", args.repository)
+    if tip is None or len(chain) < 2:
+        raise Stop("HEAD contains no import of this repository to verify.")
+    require_consistent(repo, "HEAD", args.repository, tip)
+    base = chain[1]["snapshot"]
+    allowed = touched(name_status(repo, base, target))
+    differences = name_status(repo, tip["snapshot"], "HEAD")
+    unexpected = [
+        entry
+        for entry in differences
+        if entry["category"] not in ADAPTED and not touched([entry]) <= allowed
+    ]
+    if unexpected:
+        listed = ", ".join(entry["path"] for entry in unexpected[:LIST_LIMIT])
+        raise Stop(
+            "These files differ from GitHub's snapshot although the private network never "
+            f"changed them, so GitHub's version was not taken: {listed}. Take GitHub's version "
+            f"(`git checkout {tip['snapshot'][:12]} -- <path>`) in a further commit, or explain "
+            "each one in the merge request."
+        )
     emit(
         {
-            "repository": repository,
-            "branch": args.branch,
-            "target": args.target,
-            "up_to_date": False,
-            "github": {
-                "from": old,
-                "to": new,
-                "to_time": iso(archive.commit_time),
-                "compare": compare,
-            },
-            "base_snapshot": base,
-            "snapshot": snapshot,
-            "change_notes": [
-                entry["path"]
-                for entry in github_changes
-                if entry["category"] == "change-notes" and entry["status"] != "D"
-            ],
-            "conflicts": conflicts,
-            "review_auto_merged": [path for path in both if path not in conflicts],
-            "github_changes": grouped(github_changes, args.full),
-            "private_changes": private_changes,
-            "environment_keys": environment_keys(repo, base, snapshot, github_changes),
-            "new_migration_files": [
-                entry["path"]
-                for entry in github_changes
-                if entry["category"] == "migrations" and entry["status"] == "A"
-            ],
-            "next": (
-                "Resolve the conflicts, review, then `git add` and `git commit --no-edit`."
-                if conflicts
-                else "Review, then `git commit --no-edit`."
-            )
-            + f" Afterwards `git diff --name-status {snapshot[:12]} HEAD` must list only"
-            " paths from private_changes.",
+            "repository": args.repository,
+            "verified": True,
+            "github_commit": tip["github_commit"],
+            "private_differences": [entry["path"] for entry in differences],
         }
     )
 
@@ -713,14 +911,18 @@ def parser() -> argparse.ArgumentParser:
     inspect.add_argument("--repository")
     inspect.set_defaults(run=cmd_inspect)
 
-    status = commands.add_parser("status", help="last imported GitHub commit of a clone")
-    status.add_argument("--repo", required=True, help="path of the private clone")
-    status.add_argument("--repository", required=True, help="GitHub repository name")
-    status.add_argument("--target", default="origin/main")
-    status.set_defaults(run=cmd_status)
+    for name, runner, help_text in (
+        ("status", cmd_status, "last imported GitHub commit of a clone"),
+        ("verify", cmd_verify, "after the merge commit, check that GitHub's version was taken"),
+    ):
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("--repo", required=True, help="path of the private clone")
+        command.add_argument("--repository", required=True, help="GitHub repository name")
+        command.add_argument("--target", default="origin/main")
+        command.set_defaults(run=runner)
 
     for name, runner, help_text in (
-        ("baseline", cmd_baseline, "first run: record the GitHub commit main already contains"),
+        ("baseline", cmd_baseline, "record the GitHub commit main already contains"),
         ("import", cmd_import, "merge a GitHub ZIP into a new branch"),
     ):
         command = commands.add_parser(name, help=help_text)
@@ -735,9 +937,19 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument(
                 "--confirm", action="store_true", help="create the branch and record it"
             )
+            command.add_argument(
+                "--reset",
+                action="store_true",
+                help="record again after a squashed, rebased or reverted import",
+            )
         else:
             command.add_argument(
                 "--full", action="store_true", help="also list code, test and doc paths"
+            )
+            command.add_argument(
+                "--confirm-newer",
+                action="store_true",
+                help="the user confirmed this ZIP is newer than the last import",
             )
         command.set_defaults(run=runner)
     return root

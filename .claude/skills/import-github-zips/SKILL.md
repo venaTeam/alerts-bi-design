@@ -35,7 +35,9 @@ What differs here from GitHub:
 
 The next import finds its starting point through the snapshot that reached `main` with the
 merge request. That is why merge requests must be merged with a merge commit, never squashed
-or rebased.
+or rebased. Each import also writes `.github-import.json`, a private-only file naming the
+snapshot `main` should contain. It survives a squash or a revert, so the script detects both
+and stops instead of comparing against the wrong base.
 
 ## Change notes
 
@@ -79,12 +81,15 @@ Repositories are independent; import each one fully before the next.
    exists, stop and ask: two imports from the same base split the snapshot history. Then run
    `python3 $S status --repo <clone> --repository <name>`. Stop and ask if `clean` is false or
    `merge_in_progress` is true. If `needs_baseline` is true, follow
-   [references/first-run.md](references/first-run.md) first.
+   [references/first-run.md](references/first-run.md) first. If `needs_recovery` is present,
+   an earlier import was squashed, rebased or reverted: follow "Recover" in the same file.
 2. **Import.** Branch name: `chore/github-import-<first 8 characters of github_commit>`.
    `python3 $S import --repo <clone> --zip <zip> --branch <branch>`.
    Keep the JSON: it drives the rest and the merge request. `up_to_date: true` means nothing to
    do for this repository. Exit status 2 prints `error`: do what it says, and never work around
-   it by copying files by hand.
+   it by copying files by hand. When the ZIP has no commit time (it was repacked), the script
+   cannot tell whether it is newer than the last import: ask the user, rerun with
+   `--confirm-newer` only if they confirm, and say so in the merge request.
 3. **Read the change notes**, then **resolve and port** using the rules below. Look at:
    - every path in `conflicts`;
    - every path in `review_auto_merged`: changed on both sides and merged by git;
@@ -95,8 +100,10 @@ Repositories are independent; import each one fully before the next.
    costs tokens without changing the result. Conflict resolutions and the Dockerfile and
    GitLab CI changes you port belong in the merge commit.
 4. **Commit the merge.** `git add` the resolved files, then `git commit --no-edit`. The script
-   prepared the message. Then `git diff --name-status <snapshot> HEAD` must list only paths
-   from `private_changes`; anything else means GitHub's version was not taken somewhere.
+   prepared the message and staged `.github-import.json`; never edit that file. Then run
+   `python3 $S verify --repo <clone> --repository <name>`. It fails when a file the private
+   network never changed differs from GitHub's snapshot; take GitHub's version in a further
+   commit.
 5. **Verify** (see below). Fix what the import broke in further commits on the branch.
 6. **Push with git:** `git push -u origin <branch>`. Never push the branch's files through
    the GitLab MCP; that creates new commits and loses the snapshot history.
@@ -123,6 +130,11 @@ add services, runners, images or variables; list such needs in the merge request
 The `change-note` job checks GitHub pull requests only; never port it.
 
 **`.github/`.** Take GitHub's version as it is. It does not run here.
+
+**Rolling back.** Roll back a bad release by redeploying the previous image, not by reverting
+the import on `main`. If an import merge request is reverted anyway, or was squashed or
+rebased, the next `status` reports `needs_recovery` and `import` stops; recover as in
+[references/first-run.md](references/first-run.md).
 
 **Agent instructions** (`AGENTS.md`, `CLAUDE.md`, `.claude/`). If they are not in
 `private_changes`, take GitHub's version. If they are, the private wording wins: keep it, and
@@ -165,6 +177,7 @@ version, list the exact `name==version` and stop for that repository: someone mu
 ## Stop and ask
 
 - `status` shows a dirty clone or a merge in progress, or an import is still open.
+- `status` reports `needs_recovery`: confirm the recovery ZIP with the user first.
 - A first run finds unexpected differences.
 - GitHub changes the base image or Python version, switches build tool, or adds a system
   package or a CI service that this network may not provide.

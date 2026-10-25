@@ -32,3 +32,25 @@ private work. Never guess it.
 6. Without a newer ZIP, push the branch and open a merge request titled
    `Record GitHub <repository>@<8 characters> as the import baseline`. It changes no files, and
    it must also be merged with a merge commit.
+
+## Recover after a squashed, rebased or reverted import
+
+`status` reports `needs_recovery`, and `import` stops, when `main`'s `.github-import.json` and
+its snapshot history disagree:
+
+- the import's merge request was squashed or rebased, so its snapshot is not in `main`;
+- or an import merge was reverted, so its snapshot is still in `main` but its changes are not.
+
+`needs_recovery.github_commit` names the GitHub commit `main` contains now. Tell the user what
+happened and get a ZIP of exactly that commit. Then record it again on a new branch, as in
+steps 2 to 6 above, with `--reset`:
+
+```bash
+python3 $S baseline --repo <clone> --reset --zip <zip of that commit>
+python3 $S baseline --repo <clone> --reset --zip <zip of that commit> --branch <branch> --confirm
+```
+
+The new snapshot continues the existing chain, so a later import compares against what `main`
+really contains, and a reverted GitHub commit can be imported again. If
+`needs_recovery.github_commit` is empty, `.github-import.json` was deleted: ask the user which
+GitHub commit `main` contains.
