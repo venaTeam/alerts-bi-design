@@ -42,6 +42,8 @@ or rebased.
 Every GitHub pull request adds a short note, `changes/<date>-<description>.md`, in the format
 of that repository's `changes/README.md`. A note says what changed, how to deploy it, and what
 this network must do: Dockerfile or CI logic to port, packages to request in Artifactory.
+On GitHub, `changes/notes.py` drafts each note's facts from the diff and CI rejects a note that
+is missing, unfinished or contradicts the diff, so notes from then on are complete.
 `change_notes` in the import JSON lists the notes added since the last import.
 
 - Read them before anything else. They are the cheapest way to understand the import, and
@@ -118,6 +120,7 @@ the GitLab job that runs the same kind of check. If no GitLab job matches and th
 needs no service, add it to the job that runs the other checks; otherwise list it as not
 ported. Tool versions in `.gitlab-ci.yml`, such as Poetry, follow GitHub's workflows. Do not
 add services, runners, images or variables; list such needs in the merge request instead.
+The `change-note` job checks GitHub pull requests only; never port it.
 
 **`.github/`.** Take GitHub's version as it is. It does not run here.
 

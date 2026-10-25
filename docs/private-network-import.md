@@ -48,8 +48,16 @@ squashed or rebased merge request removes it. The next import then asks for a ne
 
 A ZIP carries no commit messages or pull request descriptions. So every pull request on
 GitHub adds a short note, `changes/<date>-<description>.md`, in each repository it changes.
-The format is in that repository's `changes/README.md`. The note says what changed, how to
-deploy it, and what the private network must do.
+The note says what changed, how to deploy it, and what the private network must do.
+
+The author, usually the agent that made the change, runs
+`poetry run python changes/notes.py new` before opening the pull request. The script fills
+the facts from the diff with `main`: new migrations, `.env.example` keys, Dockerfile and CI
+changes, `poetry.lock` package versions. It leaves TODO for what only the author knows: the
+title, what changed and why, deploy order, other steps and what to port. The author replaces
+every TODO. CI runs `changes/notes.py check` on every pull request and fails when the note is
+missing, still has a TODO, or contradicts the diff. Details are in each repository's
+`changes/README.md`.
 
 The import lists the notes added since the last import. The agent reads them first and builds
 the merge request's summary and deploy notes from them. Notes explain intent only: git still
@@ -76,8 +84,8 @@ requests.
 
 ## Making imports smooth from this side
 
-- Add a change note to every pull request. Put new settings, migrations, deploy order and
-  new packages in it; the agent copies them into the deploy notes.
+- Add a change note to every pull request with `changes/notes.py new`, and replace its
+  TODOs; the import agent copies the note into the deploy notes.
 - Keep Dockerfile changes about logic: what is copied, built and run, and say in the note
   what to port. A change to base images or package sources needs a person inside to
   decide.
