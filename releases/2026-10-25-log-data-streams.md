@@ -36,6 +36,30 @@ unchanged, and the collector image stays `docker.io/fluent/fluent-bit:5.1.2`.
   and `security_exception` inside the bulk items, which the runbook's troubleshooting row now
   names.
 
+## Merged, then reviewed (2026-10-25)
+
+Design #29, admin #29 and portal #17 merged with merge commits 9ef9762, 6ed5b0b and 1c857d8 at
+09:15 UTC, after CI passed (both admin `Checks` runs on ce09c8d). The review agent's approvals
+with notes, posted minutes before, were read only after the merge. Its findings, fixed on
+fix/log-data-streams-review (design bc936ab; admin ac5fa6a and 9d5dc26; portal 000c9b1 and
+c8ab1d0, both apps pinned to bc936ab):
+
+- Deterministic ids prevent duplicates only within one backing index. On a throwaway
+  Elasticsearch 8.15 a create with an existing id got 409, and after `POST <stream>/_rollover`
+  the same create got 201 in the new backing index. The design section, decision 010, the
+  admin `fluent-bit.conf` comment and runbook section 15 now say so; the local retry test above
+  ran without a rollover.
+- Index templates must match exactly the three names: a wildcard would also match the daily
+  names, and a rollback to them (runbook 15.8) would create one data stream per day.
+- The portal had no test of its pinned snapshot, although portal #17's description said its
+  unit run covered the hashes. `tests/unit/test_design_snapshot.py` now rehashes every manifest
+  entry and refuses unlisted files; it failed on a hand-edited and an extra snapshot file.
+- The merge-commit concern did not arise: ecbb909 is reachable from design `main`.
+
+After the fixes: design `scripts/check_docs.py` passed; admin `test_openshift_deploy.py` and
+`test_design_snapshot.py` 17 passed (no Python changed); portal `pytest tests/unit` 507 passed,
+8 skipped, and `ruff check`, `ruff format --check` and `mypy` passed.
+
 ## Not run
 
 - Nothing was deployed. The runbook's 15.8 move was not exercised on OpenShift (no cluster); its
