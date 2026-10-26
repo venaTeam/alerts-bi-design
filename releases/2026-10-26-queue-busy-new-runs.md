@@ -89,5 +89,35 @@ Executed on the final code, same environment:
   the run waited. Withdraw it to run it again." and "The published week is unchanged.", and
   offered no way to start the week.
 
+## PR review follow-ups — 2026-10-26
+
+The posted PR reviews found no blocker. CI was green on admin `50cfa7a` and design `7653397`.
+The owner asked for these problems to be fixed:
+
+- **Same-key retry.** On the lock path the recheck reads committed rows only (deployments use
+  `READ_COMMITTED_SNAPSHOT ON`). An identical submission queued without the lock could commit
+  while the other waited for the team's queue lock and turn the retry into a duplicate-week
+  409. A 409 there now re-reads the submission key and returns that job.
+- **Backfill weeks skipped as published.** Such a week offers no Retry week, and the panel's
+  retry counts only retryable weeks. Retrying all failed weeks leaves out weeks published
+  since instead of refusing every week; retrying a published week on its own is still refused.
+- **Worker runbook.** Adds a query for aging queued New runs, which is how a stopped worker
+  shows up now, and the `run.job_cancelled` and `run.job_skipped` events.
+
+Revisions: design `519fe5c`; admin `5c270a6` (submission, backfill retry, panel, tests) and
+`e847316` (snapshot pinned to design `519fe5c`).
+
+Executed on the final code, same environment:
+
+- Admin integration `test_backfill.py`, `test_run_jobs.py` and `test_console.py`: **79
+  passed**, including new tests for the same-key retry and for retrying a backfill with one
+  week published while queued.
+- Admin unit **1113 passed**, including the backfill panel's Retry buttons. Ruff, format, strict
+  mypy and `check_contracts.py --console` passed. Design `check_docs.py` passed.
+- Browser, admin console on `alerts_bi_test`: a two-week backfill for Checkout API (17–24 Aug
+  and 24–31 Aug) was submitted from New runs, and the existing 24–31 Aug run was then published.
+  The worker ran 17–24 Aug and logged `run.job_skipped` for 24–31 Aug. The panel showed the
+  skipped week's message without Retry week, and offered only Dismiss.
+
 Not run locally: the full admin `scripts/ci_integration.py` and the ES-backed acceptance
 modules; CI covers them. Not deployed.
