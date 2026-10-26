@@ -119,5 +119,36 @@ Executed on the final code, same environment:
   The worker ran 17–24 Aug and logged `run.job_skipped` for 24–31 Aug. The panel showed the
   skipped week's message without Retry week, and offered only Dismiss.
 
+## Second review follow-ups — 2026-10-26
+
+The follow-up reviews found no blocker; CI was green on admin `e847316` and design `a24f234`.
+
+- **Retry by publication.** The backfill panel decided retry from the skip's error text, while
+  retry refuses any week that is published now. A week that failed for another reason and was
+  published later showed Retry buttons that were refused, and a skipped week the operator
+  withdrew, as its message says, showed none. The panel now offers Retry week, and counts
+  toward Retry failed weeks, only the failed weeks that are not published, using the same
+  query as retry. A failed week published later says "Published since. Withdraw it to run it
+  again."
+- **Runbook.** Queued rows aging with no active slot also happen while a CLI run, report,
+  deletion or long weekly invocation holds the execution lock. The runbook now sends the
+  operator to the worker's `worker.idle` reason before treating the worker as stopped.
+
+Revisions: design `d0af05f`; admin `4deafe2` (team page, panel, tests) and `6294942`
+(snapshot pinned to design `d0af05f`).
+
+Executed on the final code, same environment:
+
+- Admin integration `test_backfill.py` and `test_console.py`: **53 passed**. The retry test now
+  checks the real team page. `test_run_jobs.py` is unaffected by this change and passed at
+  `e847316`.
+- Admin unit **1113 passed**. Ruff, format, strict mypy and `check_contracts.py --console`
+  passed. Design `check_docs.py` passed.
+- Browser, admin console on `alerts_bi_test`:
+  - A two-week backfill ran 17–24 Aug and skipped 24–31 Aug, which was published while it
+    waited. While that week was published, the panel offered only Dismiss.
+  - After Withdraw week, the row offered Retry week and the panel offered Retry failed week.
+  - Retry week was queued, and the worker completed it.
+
 Not run locally: the full admin `scripts/ci_integration.py` and the ES-backed acceptance
 modules; CI covers them. Not deployed.
