@@ -51,5 +51,43 @@ indices:
   --once` ran Checkout API first and a second `--once` ran Payments Core; the open page
   reloaded itself into the completed run. The queued panel also fits at 375 px.
 
+## Review fixes — 2026-10-26
+
+An independent review of both PRs found no blocker. The owner approved fixing four findings;
+the cancel route stays a browser form route.
+
+- **Published while queued.** A queued job whose run the weekly schedule published while it
+  waited read the whole week from Elasticsearch, holding the shared slot, before persistence
+  refused it, and then advised a retry that is refused too. The worker now checks the
+  publication when it claims a job (manual or backfill week) and fails it with "Not run: this
+  week was published while the run waited. Withdraw it to run it again." plus a
+  `run.job_skipped` warning; the job panel says the published week is unchanged.
+- **Queue order.** A submission that found the slot and lock free became pending while an older
+  manual job was still queued (between worker polls, or with the worker down) and ran first.
+  It now queues behind it.
+- **Docs.** `async-runs.md` no longer says queue statements depend on a backfill or that
+  admission refuses a busy scheduler lock, and lists `run.job_cancelled` and `run.job_skipped`.
+- **Tests.** The duplicate-week 409s in `test_run_jobs.py` assert their message and a
+  different week queues; the deletion test queues its manual run without a backfill; new tests
+  cover queue order, the published skip, and a manual run refused for a week a backfill queued.
+
+Revisions: design `355d734`; admin `711ff20` (worker, submission, page, tests, README) and
+`50cfa7a` (snapshot pinned to design `355d734`).
+
+Executed on the final code, same environment:
+
+- Admin integration `test_backfill.py` and `test_console.py`: **51 passed**;
+  `test_run_jobs.py`: **26 passed** after its two new message assertions were changed to read
+  the response text (the 409 body is HTML for a client that does not ask for JSON).
+- Admin unit **1112 passed** after the worker logging test's fake database gained the
+  publication query. Ruff, format, strict mypy and `check_contracts.py --console` passed.
+  Design `check_docs.py` passed. No OpenAPI change.
+- Browser, admin console on `alerts_bi_test`: with Payments Core's job pending, a Checkout API
+  job for 17–24 Aug was queued. The existing 17–24 Aug run was then published with Publish
+  week. `run-worker --once` ran Payments Core. A second `--once` logged `run.job_skipped`
+  without starting the analysis. The job's panel read "Not run: this week was published while
+  the run waited. Withdraw it to run it again." and "The published week is unchanged.", and
+  offered no way to start the week.
+
 Not run locally: the full admin `scripts/ci_integration.py` and the ES-backed acceptance
 modules; CI covers them. Not deployed.
