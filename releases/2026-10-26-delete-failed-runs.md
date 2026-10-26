@@ -3,8 +3,9 @@
 After an operator changed `LLM_MAX_BATCH_SIZE`, retrying a failed week failed with
 `review settings changed for the same scope; use a new version/trial`. A run's model audit
 (`llm_review_scopes`) records its prompt version, model version and settings, including the
-batch cap, under the run id, and refuses a later attempt whose settings differ. The run id does
-not include those settings. A stored run could be deleted to clear its audit. A run that failed
+batch cap, under the run id, and refuses a later attempt whose settings differ. The run id
+includes the prompt and model versions but not the batch cap, the output cap, or the deployment
+when a model revision is set. A stored run could be deleted to clear its audit. A run that failed
 before storing results has no `runs` row, so Delete run answered "No such run." and the week
 could run again only under the old settings, or after deleting audit rows by hand in SQL.
 
@@ -33,10 +34,15 @@ the fixes and found one more. All are fixed in admin `9512c26`:
   queue lock, the reverse of submissions' order (a possible deadlock).
 - The reran-it test compared with the submission time instead of the attempt's start.
 
+The PR review then found the text overstated which setting changes cause the refusal. The run
+id includes the prompt and model versions, so only the batch cap, the output cap, or the
+deployment when a model revision is set can change. Design `374f875` and admin `55a278b` say
+so.
+
 Revisions: design `26d6072` (amendment), merged with `main` as `252dbb7`, then `79bd5e1`
-(review follow-ups). Admin `dc0a1dd` (deletion, console, message, tests, README), `244c341`
-(merge of `main` after the queue change), `5c05d40` (snapshot pinned to design `79bd5e1`) and
-`9512c26` (review fixes). Branches are `feat/delete-failed-runs`. Portal keeps its pin: none
+(review follow-ups) and `374f875` (settings wording). Admin `dc0a1dd` (deletion, console,
+message, tests, README), `244c341` (merge of `main` after the queue change), `9512c26` (review
+fixes), `c28eef2` (snapshot pinned to design `374f875`) and `55a278b` (message wording). Branches are `feat/delete-failed-runs`. Portal keeps its pin: none
 of its code or contracts change.
 
 Executed checks, local SQL Server 2022 and the ES mock's private `scl-appchi-*` indices:
