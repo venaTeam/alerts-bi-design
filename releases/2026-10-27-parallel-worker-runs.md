@@ -6,8 +6,8 @@ multi-week backfill held every other team's New run in the queue.
 ## Decision and resulting behavior
 
 Accepted 2026-10-27 by the product owner; design section "Parallel runs across teams" and
-[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from two
-rounds of code review on the PRs (final text in this branch's last docs commit).
+[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from four
+rounds of code review on the PRs; final text at design `c8fc766`.
 
 - **`WORKER_CONCURRENCY`** (or `run-worker --concurrency`), 1 to 8, default 1: how many jobs
   the worker runs at once. 1 keeps the existing one-job path; another value stops the worker
@@ -43,15 +43,22 @@ rounds of code review on the PRs (final text in this branch's last docs commit).
 
 ## Revisions
 
-- Design branch `feat/parallel-worker-runs` from `main` `6998540`: `6aac074` (docs, contracts,
-  decision 011), `ed52e85` (round-1 review fixes, 021 hashes from admin `11c3bf3`), then the
-  round-2 docs fixes and this release note.
-- Admin branch `feat/parallel-worker-runs` from `main` `99576a8`: `736b7e8` (code, migration
-  021, tests, README, deployment), `11c3bf3` (round-1 fixes: lock wait in short requests,
-  rollback wording, `worker.stopping` context, `--once`, `WORKER_MEMORY_*`), `86d1a41`
-  (round-2 fixes: claim retry and deadlock priority, `worker.job_lost`, runbook steps),
-  `9355597` (round 3: a claim that lost the worker's session stops the worker), each followed
-  by a snapshot pin of the design head (`31c68d2`, `9a50ed2`, `770003b`, and the last pin).
+- Design `c8fc766` (docs, contracts, decision 011) plus this release note, on branch
+  `feat/parallel-worker-runs` from `main` `6998540`:
+  - `6aac074`: docs, contracts and decision 011;
+  - `ed52e85`: round-1 fixes, with the 021 hashes from admin `11c3bf3`;
+  - `ca677f1`: round-2 fixes;
+  - `5b6e180`: round 3;
+  - `c8fc766`: round 4, `console-http.json` rules for parallel slots.
+- Admin `9355597` (code) and `c4b6922` (snapshot pinned to design `c8fc766`), on branch
+  `feat/parallel-worker-runs` from `main` `99576a8`:
+  - `736b7e8`: code, migration 021, tests, README and deployment;
+  - `11c3bf3`: round-1 fixes (lock wait in short requests, rollback wording, `worker.stopping`
+    context, `--once`, `WORKER_MEMORY_*`);
+  - `86d1a41`: round-2 fixes (claim retry and deadlock priority, `worker.job_lost`, runbook
+    steps);
+  - `9355597`: round 3, a claim that lost the worker's session stops the worker;
+  - the earlier snapshot pins `31c68d2`, `9a50ed2`, `770003b` and `2d60383`.
 - Portal keeps its pin: none of its code or contracts change.
 
 ## Executed
