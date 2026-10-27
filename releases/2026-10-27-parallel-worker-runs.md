@@ -6,8 +6,10 @@ multi-week backfill held every other team's New run in the queue.
 ## Decision and resulting behavior
 
 Accepted 2026-10-27 by the product owner; design section "Parallel runs across teams" and
-[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from five
-rounds of code review on the PRs; final text at design `8af3293`.
+[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from six
+rounds of code review on the PRs. Merged 2026-10-27 as design `7185ae3` (head `e4c50c7`, text
+of `8af3293`) and admin `11cc8c8` (head `dcb8834`); the round-6 wording fixes followed in the
+`docs/parallel-worker-runs-wording` PRs.
 
 - **`WORKER_CONCURRENCY`** (or `run-worker --concurrency`), 1 to 8, default 1: how many jobs
   the worker runs at once. 1 keeps the existing one-job path; another value stops the worker
@@ -43,17 +45,18 @@ rounds of code review on the PRs; final text at design `8af3293`.
 
 ## Revisions
 
-- Design `8af3293` (docs, contracts, decision 011) plus this release note, on branch
-  `feat/parallel-worker-runs` from `main` `6998540`:
+- Design PR #33, merged as `7185ae3`, branch `feat/parallel-worker-runs` from `main`
+  `6998540`:
   - `6aac074`: docs, contracts and decision 011;
   - `ed52e85`: round-1 fixes, with the 021 hashes from admin `11c3bf3`;
   - `ca677f1`: round-2 fixes;
   - `5b6e180`: round 3;
   - `c8fc766`: round 4, `console-http.json` rules for parallel slots;
   - `8af3293`: round 5, the runtime flow's 2026-10-27 summary and the per-team qualification
-    of "before the next backfill week".
-- Admin `b4427ad` (code) and `dcb8834` (snapshot pinned to design `8af3293`), on branch
-  `feat/parallel-worker-runs` from `main` `99576a8`:
+    of "before the next backfill week";
+  - then this release note's earlier versions.
+- Admin PR #33, merged as `11cc8c8` with code `b4427ad` and snapshot pin `dcb8834` (design
+  `8af3293`), branch `feat/parallel-worker-runs` from `main` `99576a8`:
   - `736b7e8`: code, migration 021, tests, README and deployment;
   - `11c3bf3`: round-1 fixes (lock wait in short requests, rollback wording, `worker.stopping`
     context, `--once`, `WORKER_MEMORY_*`);
@@ -62,12 +65,22 @@ rounds of code review on the PRs; final text at design `8af3293`.
   - `9355597`: round 3, a claim that lost the worker's session stops the worker;
   - `b4427ad`: round 5, a lock check before each fill (a session lost in a rollback, then
     reconnected, claims nothing) and the queued-run log text;
-  - the earlier snapshot pins `31c68d2`, `9a50ed2`, `770003b`, `2d60383` and `c4b6922`.
+  - the earlier snapshot pins `31c68d2`, `9a50ed2`, `770003b`, `2d60383`, `c4b6922` and
+    `dcb8834`.
+- Round-6 wording fixes, branch `docs/parallel-worker-runs-wording` from `main` (after
+  `feat/parallel-llm-requests`): in design, the flow summary (writers refuse rather than wait;
+  only backfill weeks oldest first) and two `console-http.json` rules (manual priority; no
+  login proxy), plus this note; in admin, the README's refuse-not-wait wording and a snapshot
+  pin of that design commit.
 - Portal keeps its pin: none of its code or contracts change.
 
 ## Executed
 
 Local SQL Server 2022 and the ES mock read through private `scl-appchi-*` indices.
+
+On admin `dcb8834` (the final code; later commits change only docs): all of
+`tests/integration`, `tests/engine/integration` and `tests/engine/acceptance`: **237 passed**,
+no errors.
 
 On admin `770003b` (code of `86d1a41`): all of `tests/integration`,
 `tests/engine/integration` and `tests/engine/acceptance`: **237 passed**, no errors.
@@ -133,8 +146,6 @@ On admin `736b7e8`, before the review fixes (the worker loop and storage lock ch
 ## Not verified
 
 - A deployment: nothing was deployed, and no cluster setting or memory limit was changed.
-- The full integration and acceptance suites after `86d1a41`; the round-3 and round-5
-  changes touch only the claim path, covered by unit tests and `test_parallel_runs.py`.
 - A real SQL Server failover during a claim; the lost-session handling is covered by a unit
   test with an invalidated connection.
 - A real deadlock between a deletion and a claim. The claim's low deadlock priority and retry
