@@ -6,7 +6,8 @@ multi-week backfill held every other team's New run in the queue.
 ## Decision and resulting behavior
 
 Accepted 2026-10-27 by the product owner; design section "Parallel runs across teams" and
-[decision 011](../decisions/011-parallel-runs-across-teams.md) (final text at design `6aac074`).
+[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from two
+rounds of code review on the PRs (final text in this branch's last docs commit).
 
 - **`WORKER_CONCURRENCY`** (or `run-worker --concurrency`), 1 to 8, default 1: how many jobs
   the worker runs at once. 1 keeps the existing one-job path; another value stops the worker
@@ -20,9 +21,16 @@ Accepted 2026-10-27 by the product owner; design section "Parallel runs across t
   claim, so CLI runs, reports, the weekly schedule, acceptance verification and synchronous
   `POST /runs` still refuse, busy submissions still queue, and deletion still goes ahead only
   beside other runs' jobs. An infrastructure error stops claims, lets the other jobs finish,
-  then exits (`worker.stopping`).
-- **Results stored one at a time** under the transaction lock `alerts-bi-persist` (10-minute
-  wait); only the Elasticsearch scan, analysis and model calls overlap.
+  then exits (`worker.stopping` names the job and slot; `worker.job_lost` each further one). A
+  failed claim (a deadlock with a deletion, which the deletion wins through the worker
+  session's low deadlock priority) is logged as `worker.claim_failed` and retried at the next
+  poll; three in a row stop the worker. `--once` runs only its first claims, one per slot.
+- **Results stored one at a time** under the transaction lock `alerts-bi-persist`, waited for
+  up to 10 minutes in 500 ms requests (the driver ends any statement after
+  `SQL_REQUEST_TIMEOUT_MS`); only the Elasticsearch scan, analysis and model calls overlap.
+- **Deployment**: `WORKER_CONCURRENCY` in `config.env`, and the run-worker container's own
+  `WORKER_MEMORY_REQUEST`/`WORKER_MEMORY_LIMIT` in `values.env` (the weekly job and admin jobs
+  keep `ANALYSIS_MEMORY_*`); the deploy README's "Run several jobs at once" gives the steps.
 - **Migration `021_parallel_run_slots`**: slots from 1 and one active job per team; no row
   changes. Roll-forward only, like every migration: undo the feature with
   `WORKER_CONCURRENCY=1`; an earlier image needs the deployment runbook's database restore.
@@ -34,43 +42,80 @@ Accepted 2026-10-27 by the product owner; design section "Parallel runs across t
 
 ## Revisions
 
-- Design `6aac074` (docs, contracts, decision 011, `check_docs.py`) plus this release note;
-  branch `feat/parallel-worker-runs` from `main` `6998540`.
-- Admin `736b7e8` (code, migration 021, tests, README, deployment) and `31c68d2` (snapshot
-  pinned to design `6aac074`); branch `feat/parallel-worker-runs` from `main` `99576a8`.
+- Design branch `feat/parallel-worker-runs` from `main` `6998540`: `6aac074` (docs, contracts,
+  decision 011), `ed52e85` (round-1 review fixes, 021 hashes from admin `11c3bf3`), then the
+  round-2 docs fixes and this release note.
+- Admin branch `feat/parallel-worker-runs` from `main` `99576a8`: `736b7e8` (code, migration
+  021, tests, README, deployment), `11c3bf3` (round-1 fixes: lock wait in short requests,
+  rollback wording, `worker.stopping` context, `--once`, `WORKER_MEMORY_*`), `86d1a41`
+  (round-2 fixes: claim retry and deadlock priority, `worker.job_lost`, runbook steps), each
+  followed by a snapshot pin of the design head (`31c68d2`, `9a50ed2`, and the last pin).
+- Portal keeps its pin: none of its code or contracts change.
 
-## Executed on the final code
+## Executed
 
-Local SQL Server 2022 and the ES mock read through private `scl-appchi-*` indices:
+Local SQL Server 2022 and the ES mock read through private `scl-appchi-*` indices.
 
-- Admin integration `tests/integration` and `tests/engine/integration`: **232 passed** (source
-  identical to `736b7e8` but for one test's formatting), including the new
-  `test_parallel_runs.py`: two teams running at once in slots 1 and 2 while the team's second
-  week waits; the weekly lock and synchronous `POST /runs` refused and a new submission queued
-  while they run; deletion of another run beside them; the database refusing a second active
-  job for one team, a taken slot and slot 0; recovery of jobs left running in two slots before
-  any claim; and a run refused after waiting on another run's storage lock, then stored.
-- Admin `tests/engine/acceptance` with `test_parallel_runs.py` on `736b7e8`: **8 passed**.
-- Admin unit `tests/unit` and `tests/engine/unit` on `31c68d2`: **1130 passed**, including
-  `test_parallel_worker.py` (side-by-side slots, refill, a poll starting new work, drain on an
-  infrastructure error, the 1–8 range and the migration 021 check). Ruff, format and strict
-  mypy passed. Design `check_docs.py` passed; `tests/unit/test_design_snapshot.py` matched.
-- Real entry points on `alerts_bi_test` after `db reset-test` (all 21 migrations applied):
-  - `run-worker --concurrency 9 --once` exited 1: "WORKER_CONCURRENCY must be between 1 and 8,
-    got 9".
-  - In the console (browser): a New run for Checkout API 17–24 Aug (fake model) showed
-    "Waiting for the worker"; a second Checkout API week, 10–17 Aug, was queued and its panel
-    showed the new queued sentence; Payments Core 17–24 Aug was queued.
-  - `run-worker --concurrency 2 --once` logged `up to 2 jobs at once, one per team`, started
-    Checkout API 24 Aug in slot 1 and Payments Core in slot 2 within 150 ms, both stored, and
-    only then started Checkout API 17 Aug in slot 1. All three jobs completed with no slot
-    left held, and the Teams page showed both teams ready to review.
+On the final worker code (admin `86d1a41`):
+
+- Unit `tests/unit` and `tests/engine/unit`: **1135 passed**. `test_parallel_worker.py`
+  covers:
+  - side-by-side slots, refill, and a poll starting new work;
+  - draining on an infrastructure error, with every lost job named;
+  - `--once` claiming only once, and the deadlock priority;
+  - a failed claim retried, and three failures stopping the worker;
+  - the 1–8 range and the migration 021 check.
+
+  Ruff, format and strict mypy passed. Design `check_docs.py` passed, and
+  `test_design_snapshot.py` matched.
+- Integration `test_parallel_runs.py`, `test_run_jobs.py` and `test_backfill.py`: **59
+  passed**. A first combined run had 4 setup errors (55 passed) that did not recur when the
+  modules were re-run (30 and 29 passed). `test_parallel_runs.py` covers:
+  - two teams running at once in slots 1 and 2 while the team's second week waits;
+  - the weekly lock and synchronous `POST /runs` refused, and a new submission queued, while
+    they run;
+  - deletion of another run beside them;
+  - the database refusing a second active job for a team, a taken slot and slot 0;
+  - recovery of jobs left in two slots before any claim;
+  - the storage lock timing out, and a 2.5 s wait under a 1 s `SQL_REQUEST_TIMEOUT_MS`
+    storing the run. With a single 10-minute lock request, that test fails with "DBPROCESS
+    is dead".
+- Real entry points on `alerts_bi_test` after `db reset-test`, with three runs queued through
+  the console's admission (`submit_job`): Checkout API 24 Aug (pending), Checkout API 17 Aug
+  and Payments Core 24 Aug (both queued).
+  - `run-worker --concurrency 2 --once` started Checkout API 24 Aug in slot 1 and Payments
+    Core in slot 2, 84 ms apart. Both completed, and it exited without starting Checkout API
+    17 Aug.
+  - A second `--once` ran that week in slot 1.
+
+On admin `11c3bf3` (round-1 fixes): integration `test_parallel_runs`,
+`test_deployment_migrations`, `test_run_jobs`, `test_migrations`,
+`test_migration_020_upgrade` and `test_persistence`: **73 passed**.
+
+On admin `736b7e8`, before the review fixes (the worker loop and storage lock changed since):
+
+- All of `tests/integration` and `tests/engine/integration`: **232 passed**.
+- `tests/engine/acceptance` with `test_parallel_runs.py`: **8 passed**.
+- `run-worker --concurrency 9 --once` exited 1: "WORKER_CONCURRENCY must be between 1 and 8,
+  got 9".
+- In the console in a browser:
+  - a New run for Checkout API showed "Waiting for the worker";
+  - a second Checkout API week was queued and its panel showed the new queued sentence;
+  - a Payments Core week was queued.
+
+  `src/pages.py` has not changed since.
+- `run-worker --concurrency 2 --once` ran Checkout API and Payments Core at once, and the
+  Teams page showed both ready to review.
 
 ## Not verified
 
 - A deployment: nothing was deployed, and no cluster setting or memory limit was changed.
-- Two real runs contending for `alerts-bi-persist` at the same moment (the local runs stored
-  0.6 s apart; the wait and timeout are covered by the lock test).
-- The weekly backfill yield with more than one slot is covered by the shared claim function
-  and the existing single-slot tests, not by a parallel-specific test.
+- The full integration and acceptance suites on the final code; they last ran in full on
+  `736b7e8`, and the affected modules above ran on the final code.
+- A real deadlock between a deletion and a claim. The claim's low deadlock priority and retry
+  are covered by unit tests, not by reproducing the deadlock.
+- Two real runs contending for `alerts-bi-persist` at the same moment; the wait and timeout are
+  covered by the lock tests.
+- The weekly backfill yield with more than one slot. It goes through the shared claim function
+  that the existing single-slot tests cover.
 - Elasticsearch and model load at production volume with several jobs at once.
