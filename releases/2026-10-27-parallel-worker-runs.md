@@ -24,7 +24,9 @@ Accepted 2026-10-27 by the product owner; design section "Parallel runs across t
 - **Results stored one at a time** under the transaction lock `alerts-bi-persist` (10-minute
   wait); only the Elasticsearch scan, analysis and model calls overlap.
 - **Migration `021_parallel_run_slots`**: slots from 1 and one active job per team; no row
-  changes, compatible with older images. Console readiness requires it.
+  changes. Roll-forward only, like every migration: undo the feature with
+  `WORKER_CONCURRENCY=1`; an earlier image needs the deployment runbook's database restore.
+  Console readiness requires it.
 - **Console**: a queued run says "A team runs one week at a time, and only a set number of
   teams run at once, so this one waits for the runs ahead of it."
 - **Unchanged**: job states, routes, payloads, the queue, cancel and retry rules, CSV outputs,
