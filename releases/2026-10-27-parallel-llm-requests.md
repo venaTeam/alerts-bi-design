@@ -35,6 +35,11 @@ design section "Parallel model requests within a run" and
 - Admin branch `feat/parallel-llm-requests` from `770003b`: `bfcb36d` (snapshot pin of design
   `d12fc5b`), `312f3e7` (setting, parallel assessment, journal lock, tests, deploy examples,
   README).
+- Both branches then merged decision 011's round-3 review fixes (design `5b6e180`, admin
+  `9355597`/`2d60383`): design merge `72c1d47`, admin merge `92404f9` with the snapshot
+  re-pinned to `72c1d47`. On `92404f9` the unit suite (1151 passed), ruff, ruff format, mypy and
+  the snapshot test ran again; the integration runs below are from `312f3e7`, which differs only
+  by the merged worker claim fix.
 
 ## Executed
 
