@@ -6,8 +6,8 @@ multi-week backfill held every other team's New run in the queue.
 ## Decision and resulting behavior
 
 Accepted 2026-10-27 by the product owner; design section "Parallel runs across teams" and
-[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from five
-rounds of code review on the PRs; final text at design `8af3293`.
+[decision 011](../decisions/011-parallel-runs-across-teams.md), with the corrections from six
+rounds of code review on the PRs; final text at design `2b48378`.
 
 - **`WORKER_CONCURRENCY`** (or `run-worker --concurrency`), 1 to 8, default 1: how many jobs
   the worker runs at once. 1 keeps the existing one-job path; another value stops the worker
@@ -43,7 +43,7 @@ rounds of code review on the PRs; final text at design `8af3293`.
 
 ## Revisions
 
-- Design `8af3293` (docs, contracts, decision 011) plus this release note, on branch
+- Design `2b48378` (docs, contracts, decision 011) plus this release note, on branch
   `feat/parallel-worker-runs` from `main` `6998540`:
   - `6aac074`: docs, contracts and decision 011;
   - `ed52e85`: round-1 fixes, with the 021 hashes from admin `11c3bf3`;
@@ -51,8 +51,11 @@ rounds of code review on the PRs; final text at design `8af3293`.
   - `5b6e180`: round 3;
   - `c8fc766`: round 4, `console-http.json` rules for parallel slots;
   - `8af3293`: round 5, the runtime flow's 2026-10-27 summary and the per-team qualification
-    of "before the next backfill week".
-- Admin `b4427ad` (code) and `dcb8834` (snapshot pinned to design `8af3293`), on branch
+    of "before the next backfill week";
+  - `2b48378`: round 6, the flow summary and two `console-http.json` rules (writers refuse
+    rather than wait; manual priority; no login proxy).
+- Admin `b4427ad` (code), `a39975a` (README wording) and `477e9d6` (snapshot pinned to design
+  `2b48378`), on branch
   `feat/parallel-worker-runs` from `main` `99576a8`:
   - `736b7e8`: code, migration 021, tests, README and deployment;
   - `11c3bf3`: round-1 fixes (lock wait in short requests, rollback wording, `worker.stopping`
@@ -62,12 +65,17 @@ rounds of code review on the PRs; final text at design `8af3293`.
   - `9355597`: round 3, a claim that lost the worker's session stops the worker;
   - `b4427ad`: round 5, a lock check before each fill (a session lost in a rollback, then
     reconnected, claims nothing) and the queued-run log text;
-  - the earlier snapshot pins `31c68d2`, `9a50ed2`, `770003b`, `2d60383` and `c4b6922`.
+  - the earlier snapshot pins `31c68d2`, `9a50ed2`, `770003b`, `2d60383`, `c4b6922` and
+    `dcb8834`.
 - Portal keeps its pin: none of its code or contracts change.
 
 ## Executed
 
 Local SQL Server 2022 and the ES mock read through private `scl-appchi-*` indices.
+
+On admin `dcb8834` (the final code; later commits change only docs): all of
+`tests/integration`, `tests/engine/integration` and `tests/engine/acceptance`: **237 passed**,
+no errors.
 
 On admin `770003b` (code of `86d1a41`): all of `tests/integration`,
 `tests/engine/integration` and `tests/engine/acceptance`: **237 passed**, no errors.
@@ -133,8 +141,6 @@ On admin `736b7e8`, before the review fixes (the worker loop and storage lock ch
 ## Not verified
 
 - A deployment: nothing was deployed, and no cluster setting or memory limit was changed.
-- The full integration and acceptance suites after `86d1a41`; the round-3 and round-5
-  changes touch only the claim path, covered by unit tests and `test_parallel_runs.py`.
 - A real SQL Server failover during a claim; the lost-session handling is covered by a unit
   test with an invalidated connection.
 - A real deadlock between a deletion and a claim. The claim's low deadlock priority and retry
