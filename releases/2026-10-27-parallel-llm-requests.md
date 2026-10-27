@@ -40,6 +40,16 @@ design section "Parallel model requests within a run" and
   re-pinned to `72c1d47`. On `92404f9` the unit suite (1151 passed), ruff, ruff format, mypy and
   the snapshot test ran again; the integration runs below are from `312f3e7`, which differs only
   by the merged worker claim fix.
+- Later merges of decision 011's revisions: design `d1697e0` and `a67ec84`, admin `8f3c044`
+  and `b92bea5`, each re-pinning the snapshot; admin also gained the Claude code review
+  workflow, copied byte for byte from `main` (`5d14df8`; design `4390da9`).
+- Admin `a8c5be4` fixes what an independent review found in failure paths: after one audit
+  write fails, or once the review lock is released, the journal refuses every later write (a
+  lost connection would otherwise continue on a fresh session without the run's locks); a
+  failing run's request threads start no further attempt; and `duration_ms` no longer counts
+  waiting for another thread's journal write. On `a8c5be4`: unit 1154 passed; ruff, ruff
+  format and mypy clean; `tests/engine/integration/test_llm_audit.py` 9 passed. On `b92bea5`:
+  unit 1155 passed; ruff, ruff format and mypy clean.
 
 ## Executed
 
