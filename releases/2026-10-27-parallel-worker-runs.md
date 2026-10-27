@@ -24,7 +24,8 @@ rounds of code review on the PRs (final text in this branch's last docs commit).
   then exits (`worker.stopping` names the job and slot; `worker.job_lost` each further one). A
   failed claim (a deadlock with a deletion, which the deletion wins through the worker
   session's low deadlock priority) is logged as `worker.claim_failed` and retried at the next
-  poll; three in a row stop the worker. `--once` runs only its first claims, one per slot.
+  poll; three in a row, or one that lost the worker's SQL session (and with it the execution
+  lock), stop the worker. `--once` runs only its first claims, one per slot.
 - **Results stored one at a time** under the transaction lock `alerts-bi-persist`, waited for
   up to 10 minutes in 500 ms requests (the driver ends any statement after
   `SQL_REQUEST_TIMEOUT_MS`); only the Elasticsearch scan, analysis and model calls overlap.
@@ -48,15 +49,22 @@ rounds of code review on the PRs (final text in this branch's last docs commit).
 - Admin branch `feat/parallel-worker-runs` from `main` `99576a8`: `736b7e8` (code, migration
   021, tests, README, deployment), `11c3bf3` (round-1 fixes: lock wait in short requests,
   rollback wording, `worker.stopping` context, `--once`, `WORKER_MEMORY_*`), `86d1a41`
-  (round-2 fixes: claim retry and deadlock priority, `worker.job_lost`, runbook steps), each
-  followed by a snapshot pin of the design head (`31c68d2`, `9a50ed2`, and the last pin).
+  (round-2 fixes: claim retry and deadlock priority, `worker.job_lost`, runbook steps),
+  `9355597` (round 3: a claim that lost the worker's session stops the worker), each followed
+  by a snapshot pin of the design head (`31c68d2`, `9a50ed2`, `770003b`, and the last pin).
 - Portal keeps its pin: none of its code or contracts change.
 
 ## Executed
 
 Local SQL Server 2022 and the ES mock read through private `scl-appchi-*` indices.
 
-On the final worker code (admin `86d1a41`):
+On admin `770003b` (code of `86d1a41`): all of `tests/integration`,
+`tests/engine/integration` and `tests/engine/acceptance`: **237 passed**, no errors.
+
+On the final worker code (admin `9355597`): unit **1136 passed**, including a lost worker
+session stopping claims at once; `test_parallel_runs.py` **5 passed**.
+
+On admin `86d1a41`:
 
 - Unit `tests/unit` and `tests/engine/unit`: **1135 passed**. `test_parallel_worker.py`
   covers:
@@ -110,8 +118,10 @@ On admin `736b7e8`, before the review fixes (the worker loop and storage lock ch
 ## Not verified
 
 - A deployment: nothing was deployed, and no cluster setting or memory limit was changed.
-- The full integration and acceptance suites on the final code; they last ran in full on
-  `736b7e8`, and the affected modules above ran on the final code.
+- The full integration and acceptance suites after `86d1a41`; the round-3 change only
+  touches the claim-error path, covered by unit tests and `test_parallel_runs.py`.
+- A real SQL Server failover during a claim; the lost-session handling is covered by a unit
+  test with an invalidated connection.
 - A real deadlock between a deletion and a claim. The claim's low deadlock priority and retry
   are covered by unit tests, not by reproducing the deadlock.
 - Two real runs contending for `alerts-bi-persist` at the same moment; the wait and timeout are
