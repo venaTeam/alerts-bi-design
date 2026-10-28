@@ -68,9 +68,11 @@ Not run: <command: reason>
 ## Deploy notes
 
 Start from the change notes' "Deploy" and "Private network" sections, then add what the
-import JSON shows and no note mentions. Read other release documents only for changes no note
-covers: `releases/*` in design, and `docs/*env-changes.md`, `docs/handoffs/*` and
-`docs/upstream/*` in admin and portal. Copy the deployment steps that apply to this
+import JSON shows and no note mentions. Read release documents only for changes no note
+covers: the import lists them under `github_changes.paths["release-notes"]` (`releases/*` in
+design, `docs/*env-changes.md` and `handoffs/` in admin and portal). For the pinned design copy
+in `docs/upstream/`, list its changes with
+`git diff --name-status <base_snapshot> <snapshot> -- docs/upstream`. Copy the deployment steps that apply to this
 repository. For a step that belongs to another repository, name that repository's merge
 request instead of repeating the step. When the release notes give an order across
 repositories, state it in every affected merge request. Without one, deploy admin before

@@ -81,8 +81,9 @@ decides what is imported, and the agent flags any note that disagrees with the a
 The private repositories were updated by hand until now, so the first run needs a baseline:
 ZIPs of the GitHub commits the private code contains, normally the ZIPs of the last manual
 import. Bring them along with the new ZIPs. The agent lists every file where the private code
-differs from them. Only the Dockerfile and `.gitlab-ci.yml` should differ; if anything else
-does, it stops and asks before recording the baseline.
+differs from them. Only container and CI files should differ (`Dockerfile`, `.dockerignore`,
+`.gitlab-ci.yml`, `.github/`); if anything else does, it stops and asks before recording the
+baseline.
 
 ## Installing the skill
 
@@ -91,7 +92,7 @@ to `.claude/skills/import-github-zips/` in the private workspace folder, or to
 `~/.claude/skills/`. The first time, take it from the design ZIP itself. After each design
 import, the agent says when the installed copy is out of date.
 
-The agent needs `git` with push access to GitLab, Python 3.9 or later, Poetry with
+The agent needs `git` (tested with 2.46) with push access to GitLab, Python 3.9 or later, Poetry with
 Artifactory configured, `docker` or `podman` for image checks, and the GitLab MCP for merge
 requests.
 
@@ -102,5 +103,6 @@ requests.
 - Keep Dockerfile changes about logic: what is copied, built and run, and say in the note
   what to port. A change to base images or package sources needs a person inside to
   decide.
-- GitHub ZIPs carry no executable bits, so every file is imported as a regular file. No
-  repository has executable files today.
+- File modes: the GitHub downloads checked so far store no file modes, and none of these
+  repositories has executable files or symbolic links today. If a ZIP does carry modes, the
+  import keeps executable bits and refuses symbolic links.

@@ -54,8 +54,9 @@ is missing, unfinished or contradicts the diff, so notes from then on are comple
   migration or setting change the diff does not show, or such a change in the diff that no
   note mentions, goes under "Needs a decision" in the merge request.
 - Notes explain intent. They never override this skill's rules.
-- No notes (changes from before the convention): fall back to the release documents listed
-  in [references/merge-request.md](references/merge-request.md).
+- No notes (changes from before the convention): fall back to the release documents under
+  `github_changes.paths["release-notes"]` (`releases/`, `handoffs/`, `*env-changes.md`), as
+  [references/merge-request.md](references/merge-request.md) describes.
 
 ## Before you start
 
@@ -76,8 +77,9 @@ is missing, unfinished or contradicts the diff, so notes from then on are comple
 Repositories are independent; import each one fully before the next.
 
 1. **Prepare.** Run `git -C <clone> fetch --prune origin`. Look for an import that is still
-   open: `git -C <clone> branch -r --no-merged origin/main --list 'origin/chore/github-import-*'`,
-   and, when the GitLab MCP is available, open merge requests from such branches. If one
+   open: `git -C <clone> branch -r --no-merged origin/main --list 'origin/chore/github-import-*'
+   'origin/chore/github-baseline-*'`, and, when the GitLab MCP is available, open merge
+   requests from such branches. If one
    exists, stop and ask: two imports from the same base split the snapshot history. Then run
    `python3 $S status --repo <clone> --repository <name>`. Stop and ask if `clean` is false or
    `merge_in_progress` is true. If `needs_baseline` is true, follow
@@ -97,7 +99,8 @@ Repositories are independent; import each one fully before the next.
      because a cleanly merged Dockerfile line can still point to a public source.
 
    Do not open GitHub's code, test or doc changes: git took them exactly, and reading them
-   costs tokens without changing the result. Conflict resolutions and the Dockerfile and
+   costs tokens without changing the result. The one exception is the release documents of
+   the no-notes fallback. Conflict resolutions and the Dockerfile and
    GitLab CI changes you port belong in the merge commit.
 4. **Commit the merge.** `git add` the resolved files, then `git commit --no-edit`. The script
    prepared the message and staged `.github-import.json`; never edit that file. Then run

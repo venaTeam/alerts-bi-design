@@ -7,6 +7,7 @@ on main, the way GitLab would merge it (merge commit, squash, or a later revert)
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import stat
 import struct
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -276,3 +278,109 @@ def test_zips_that_did_not_come_from_github_are_refused(repo: Path, zips: Path) 
     other = make_zip(zips, V1, C2, 1000, name="alerts-bi-design")
     code, out = run(repo, "inspect", "--repository", "alerts-bi", str(other))
     assert code == 2 and "not repository alerts-bi" in out["error"]
+
+
+def load_script() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("github_import", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_a_squash_that_copies_snapshot_trailers_is_not_a_snapshot(repo: Path, zips: Path) -> None:
+    # First run in one merge request, squashed with a message that includes the snapshot's
+    # (a GitLab squash template built from commit messages).
+    baseline(repo, zips, "chore/github-import-22222222")
+    import_v2(repo, zips, "chore/github-import-22222222")
+    copied = git(
+        repo, "log", "-1", "--format=%B", "--grep=^GitHub-Snapshot-Kind: baseline",
+        "chore/github-import-22222222",
+    )  # fmt: skip
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--squash", "chore/github-import-22222222")
+    git(repo, "commit", "-q", "-m", copied)
+    publish(repo)
+    code, status = run(repo, "status", "--repo", ".", "--repository", NAME)
+    assert "last_import" not in status and status["needs_recovery"]["github_commit"] == C2
+    v3 = make_zip(zips, V3, C3, 3000)
+    code, out = run(repo, "import", "--repo", ".", "--zip", str(v3), "--branch", "b")
+    assert code == 2 and "squashed" in out["error"]
+    code, out = run(
+        repo, "baseline", "--repo", ".", "--reset", "--zip", str(make_zip(zips, V2, C2, 2000)),
+        "--branch", "chore/github-import-33333333", "--confirm",
+    )  # fmt: skip
+    assert code == 0 and out["recorded"], out
+    code, out = run(
+        repo, "import", "--repo", ".", "--zip", str(v3), "--branch", "chore/github-import-33333333"
+    )
+    assert code == 0, out
+    assert [entry["path"] for entry in out["private_changes"]] == [".gitlab-ci.yml", "Dockerfile"]
+    assert (repo / ".gitlab-ci.yml").is_file()
+    assert (repo / "Dockerfile").read_text().startswith("FROM registry.corp/python")
+
+
+def test_split_chains_are_reported_and_joined_by_reset(repo: Path, zips: Path) -> None:
+    before = git(repo, "rev-parse", "main")
+    baseline(repo, zips, "first")
+    merge_request(repo, "first")
+    # A second baseline made from the old main, as if two baseline merge requests were open.
+    git(repo, "update-ref", "refs/remotes/origin/old", before)
+    code, out = run(
+        repo, "baseline", "--repo", ".", "--zip", str(make_zip(zips, V1, C1, 1000)),
+        "--target", "origin/old", "--branch", "second", "--confirm",
+    )  # fmt: skip
+    assert code == 0, out
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-X", "ours", "-m", "Merge branch 'second'", "second")
+    publish(repo)
+    code, status = run(repo, "status", "--repo", ".", "--repository", NAME)
+    assert code == 0 and "separate import chains" in status["needs_recovery"]["reason"]
+    v2 = make_zip(zips, V2, C2, 2000)
+    code, out = run(repo, "import", "--repo", ".", "--zip", str(v2), "--branch", "b")
+    assert code == 2 and "separate import chains" in out["error"]
+    code, out = run(
+        repo, "baseline", "--repo", ".", "--reset", "--zip", str(make_zip(zips, V1, C1, 1000)),
+        "--branch", "joined", "--confirm",
+    )  # fmt: skip
+    assert code == 0 and out["recorded"], out
+    code, status = run(repo, "status", "--repo", ".", "--repository", NAME, "--target", "HEAD")
+    assert status["last_import"]["github_commit"] == C1 and "needs_recovery" not in status
+    code, out = run(repo, "import", "--repo", ".", "--zip", str(v2), "--branch", "joined")
+    assert code == 0 and out["conflicts"] == ["Dockerfile"], out
+
+
+def test_container_ci_and_release_files_are_listed(repo: Path) -> None:
+    module = load_script()
+    assert module.category("docker/Dockerfile.worker") == "container"
+    assert module.category("Dockerfile.api") == "container"
+    for release in ("releases/x.md", "docs/handoffs/x.md", "docs/admin-env-changes.md"):
+        assert module.category(release) == "release-notes", release
+    assert module.category("docs/outputs.md") == "docs"
+    (repo / "build").mkdir()
+    git(repo, "mv", "Dockerfile", "build/image.txt")
+    git(repo, "commit", "-q", "-m", "Rename the Dockerfile")
+    assert module.name_status(repo, "HEAD~1", "HEAD") == [
+        {"status": "R", "from": "Dockerfile", "path": "build/image.txt", "category": "container"}
+    ]
+
+
+def test_baseline_never_records_onto_the_target_branch(repo: Path, zips: Path) -> None:
+    git(repo, "update-ref", "refs/remotes/origin/develop", "main")
+    code, out = run(
+        repo, "baseline", "--repo", ".", "--zip", str(make_zip(zips, V1, C1, 1000)),
+        "--target", "origin/develop", "--branch", "develop", "--confirm",
+    )  # fmt: skip
+    assert code == 2 and "Never import into develop" in out["error"]
+
+
+def test_old_git_without_object_format_means_sha1(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = load_script()
+
+    def echo(*args: object, **kwargs: object) -> bytes:
+        return b"--show-object-format\n"
+
+    monkeypatch.setattr(module, "git", echo)
+    assert module.object_format(tmp_path) == "sha1"

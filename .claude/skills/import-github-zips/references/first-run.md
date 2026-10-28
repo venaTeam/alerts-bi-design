@@ -39,7 +39,9 @@ private work. Never guess it.
 its snapshot history disagree:
 
 - the import's merge request was squashed or rebased, so its snapshot is not in `main`;
-- or an import merge was reverted, so its snapshot is still in `main` but its changes are not.
+- or an import merge was reverted, so its snapshot is still in `main` but its changes are not;
+- or two baselines or imports from the same base were both merged, so `main` holds two
+  separate snapshot chains. `--reset` joins them.
 
 `needs_recovery.github_commit` names the GitHub commit `main` contains now. Tell the user what
 happened and get a ZIP of exactly that commit. Then record it again on a new branch, as in

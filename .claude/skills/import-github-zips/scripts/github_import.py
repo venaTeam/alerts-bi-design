@@ -63,6 +63,10 @@ class Stop(Exception):
     """The import must stop; the message says why and what to do."""
 
 
+class SplitHistory(Stop):
+    """Main holds more than one snapshot chain; `baseline --reset` joins them."""
+
+
 # --------------------------------------------------------------------------- git helpers
 
 
@@ -124,7 +128,8 @@ def require_clean(repo: Path) -> None:
 
 def object_format(repo: Path) -> str:
     fmt = git(repo, "rev-parse", "--show-object-format", check=False).decode().strip()
-    return fmt or "sha1"
+    # Older git does not know the option and echoes it back; those repositories are SHA-1.
+    return fmt if fmt in ("sha1", "sha256") else "sha1"
 
 
 # --------------------------------------------------------------------------- ZIP archives
@@ -268,7 +273,7 @@ def trailers(message: str) -> dict[str, str]:
 def imported_snapshots(repo: Path, rev: str, repository: str) -> list[dict[str, Any]]:
     """Snapshot commits of `repository` reachable from `rev`."""
     raw = git(repo, "log", f"--grep=^{SNAPSHOT_TRAILER}: ", "--format=%H%x00%P%x00%B%x1e", rev)
-    snapshots = []
+    snapshots: list[dict[str, Any]] = []
     for record in raw.decode("utf-8", "replace").split("\x1e"):
         record = record.strip("\n")
         if not record:
@@ -287,7 +292,20 @@ def imported_snapshots(repo: Path, rev: str, repository: str) -> list[dict[str, 
                 "kind": found.get(KIND_TRAILER, "baseline" if not parents else "import"),
             }
         )
-    return snapshots
+    # A real snapshot's parents are snapshots of the same repository, or it has none. A squash
+    # or rebase commit that copied a snapshot's message has a private parent; drop it, and
+    # anything built on it, so it can never become a merge base.
+    valid = {snap["snapshot"] for snap in snapshots}
+    while True:
+        keep = {
+            snap["snapshot"]
+            for snap in snapshots
+            if snap["snapshot"] in valid and all(parent in valid for parent in snap["parents"])
+        }
+        if keep == valid:
+            break
+        valid = keep
+    return [snap for snap in snapshots if snap["snapshot"] in valid]
 
 
 def recorded_repositories(repo: Path, rev: str) -> set[str]:
@@ -298,6 +316,11 @@ def recorded_repositories(repo: Path, rev: str) -> set[str]:
     return {name for name in found if name}
 
 
+def snapshot_tips(snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    parents = {parent for snap in snapshots for parent in snap["parents"]}
+    return [snap for snap in snapshots if snap["snapshot"] not in parents]
+
+
 def last_import(
     repo: Path, rev: str, repository: str
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -305,11 +328,10 @@ def last_import(
     snapshots = imported_snapshots(repo, rev, repository)
     if not snapshots:
         return None, []
-    parents = {parent for snap in snapshots for parent in snap["parents"]}
-    tips = [snap for snap in snapshots if snap["snapshot"] not in parents]
+    tips = snapshot_tips(snapshots)
     if len(tips) != 1:
         listed = ", ".join(tip["github_commit"][:12] for tip in tips)
-        raise Stop(
+        raise SplitHistory(
             f"{rev} contains {len(tips)} separate import chains for {repository} ({listed}). "
             "Two imports were probably merged from the same base. Ask the user which GitHub "
             "commit main really contains, then record it again with `baseline --reset` "
@@ -395,7 +417,7 @@ def quote_path(path: str) -> bytes:
     return bytes(out + b'"')
 
 
-def write_snapshot(repo: Path, archive: Archive, parent: str | None, kind: str) -> str:
+def write_snapshot(repo: Path, archive: Archive, parents: list[str], kind: str) -> str:
     """Commit the ZIP contents exactly, without touching the index or working tree."""
     repository, commit = archive.require()
     ident = git_text(repo, "var", "GIT_COMMITTER_IDENT")
@@ -415,8 +437,9 @@ def write_snapshot(repo: Path, archive: Archive, parent: str | None, kind: str) 
     stream = bytearray()
     stream += f"commit {TEMP_REF}\nauthor {ident}\ncommitter {ident}\n".encode()
     stream += b"data %d\n" % len(message) + message
-    if parent:
-        stream += f"from {parent}\n".encode()
+    # The previous tip; a --reset snapshot joining split chains has several.
+    for index, parent in enumerate(parents):
+        stream += f"{'from' if index == 0 else 'merge'} {parent}\n".encode()
     stream += b"deleteall\n"
     for inner, mode, content in archive.files():
         stream += b"M " + mode.encode() + b" inline " + quote_path(inner) + b"\n"
@@ -496,7 +519,9 @@ def category(path: str) -> str:
         return "tests"
     if first == "changes" and name.endswith(".md") and name != "README.md":
         return "change-notes"
-    if first in ("docs", "releases", "decisions") or name.endswith(".md"):
+    if first == "releases" or "/handoffs/" in f"/{path}" or name.endswith("env-changes.md"):
+        return "release-notes"  # listed: the fallback when no change note covers a change
+    if first in ("docs", "decisions") or name.endswith(".md"):
         return "docs"
     return "code"
 
@@ -515,6 +540,8 @@ def name_status(repo: Path, old: str, new: str) -> list[dict[str, str]]:
         entry["path"] = parts[index].decode("utf-8", "surrogateescape")
         index += 1
         entry["category"] = category(entry["path"])
+        if "from" in entry and category(entry["from"]) in ADAPTED:
+            entry["category"] = category(entry["from"])  # a renamed Dockerfile is still one
         if entry["path"] != STATE_FILE:
             entries.append(entry)
     return entries
@@ -597,10 +624,15 @@ def cmd_inspect(args: argparse.Namespace) -> None:
 def cmd_status(args: argparse.Namespace) -> None:
     repo = clone(args.repo)
     target = resolve(repo, args.target)
-    tip, chain = last_import(repo, target, args.repository)
     payload = {"repository": args.repository, "target": args.target, "target_commit": target}
     payload.update(worktree_state(repo))
-    problem = state_problem(repo, target, args.repository, tip)
+    try:
+        tip, chain = last_import(repo, target, args.repository)
+        problem = state_problem(repo, target, args.repository, tip)
+    except SplitHistory as split:
+        state = read_state(repo, target) or {}
+        tip, chain = None, []
+        problem = {"reason": str(split), "github_commit": str(state.get("github_commit", ""))}
     payload["needs_baseline"] = tip is None and problem is None
     if problem:
         payload["needs_recovery"] = problem
@@ -661,9 +693,12 @@ def cmd_baseline(args: argparse.Namespace) -> None:
     archive = Archive(Path(args.zip), args.repository, args.github_commit)
     repository, commit = archive.require()
     target = resolve(repo, args.target)
-    tip, _ = last_import(repo, target, repository)
+    if args.branch:
+        protected_branch(args.branch, args.target)
+    # Every current tip becomes a parent of the new snapshot, so --reset also joins split chains.
+    tips = snapshot_tips(imported_snapshots(repo, target, repository))
     state = read_state(repo, target)
-    if (tip or state) and not args.reset:
+    if (tips or state) and not args.reset:
         raise Stop(
             f"{args.target} already records imports of {repository}. Use `import`; after a "
             "squashed, rebased or reverted import use `baseline --reset` (references/first-run.md)."
@@ -676,7 +711,7 @@ def cmd_baseline(args: argparse.Namespace) -> None:
     others = recorded_repositories(repo, target) - {repository}
     if others:
         raise Stop(f"This clone records imports of {', '.join(sorted(others))}, not {repository}.")
-    snapshot = write_snapshot(repo, archive, tip["snapshot"] if tip else None, "baseline")
+    snapshot = write_snapshot(repo, archive, [tip["snapshot"] for tip in tips], "baseline")
     differences = name_status(repo, snapshot, target)
     expected = [entry for entry in differences if entry["category"] in ("container", "ci")]
     unexpected = [entry for entry in differences if entry["category"] not in ("container", "ci")]
@@ -708,7 +743,7 @@ def cmd_baseline(args: argparse.Namespace) -> None:
                 f"{BASELINE_TRAILER}: {commit}\n"
             )
             merge = ["merge", "--quiet", "--no-ff", "--no-commit", "-s", "ours", "-m", message]
-            if tip is None:
+            if not tips:
                 merge.append("--allow-unrelated-histories")
             git(repo, *merge, snapshot)
             write_state(repo, repository, commit, snapshot)
@@ -776,7 +811,7 @@ def cmd_import(args: argparse.Namespace) -> None:
             f"{tip['github_commit'][:12]} ({iso(tip['github_commit_time'])})."
         )
     base = tip["snapshot"]
-    snapshot = write_snapshot(repo, archive, base, "import")
+    snapshot = write_snapshot(repo, archive, [base], "import")
     previous = None if continuing else start_branch(repo, args.branch, target)
     try:
         payload = merge_import(repo, args, repository, archive, tip, snapshot)
@@ -961,6 +996,9 @@ def main() -> int:
         args.run(args)
     except Stop as stop:
         emit({"error": str(stop)})
+        return 2
+    except Exception as error:  # still JSON, never a bare traceback the agent cannot parse
+        emit({"error": f"Unexpected failure ({type(error).__name__}): {error}"})
         return 2
     return 0
 
