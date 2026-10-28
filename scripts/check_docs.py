@@ -61,8 +61,8 @@ def main() -> None:
     ):
         assert (ROOT / relative).is_file(), relative
     migrations = json.loads((ROOT / "contracts/migrations.json").read_text("utf-8"))
-    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 21
-    assert "021_parallel_run_slots" == migrations["schema_head"]
+    assert len([name for name in migrations["files"] if name.endswith(".sql")]) == 22
+    assert "022_long_key_fields" == migrations["schema_head"]
     console = json.loads((ROOT / "contracts/console-http.json").read_text("utf-8"))
     assert console["schema_head"] == migrations["schema_head"]
     check_mockups()
