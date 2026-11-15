@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Pipeline / ETL · Action plan · Alerts BI (mock, large team)</title>
+<style>
+/* One token layer for light and dark. Mock only: no JavaScript, no inline styles,
+   logical properties throughout so the page mirrors under dir="rtl". */
+:root{
+  color-scheme:light dark;
+  --page:#F2F4F7; --surface:#FFFFFF; --sunk:#E9EDF2;
+  --ink:#16202B; --ink-2:#3B4856; --muted:#566371;
+  --line:#D5DBE2; --line-strong:#A9B3BF;
+  --v2:#3646B4; --v2-soft:#E4E7F9;
+  --delete:#A8322B; --delete-soft:#F9E3E0;
+  --quiet:#8A5800; --quiet-soft:#FAEBCB;
+  --rewrite:#6A3A9C; --rewrite-soft:#EFE4F8;
+  --good:#1C6E45; --good-soft:#DCF0E4;
+  --focus:#2F5FD0;
+  --sans:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --page:#10161D; --surface:#19212B; --sunk:#222C38;
+  --ink:#E8EDF2; --ink-2:#C3CCD6; --muted:#9BA7B4;
+  --line:#2F3A47; --line-strong:#4A5868;
+  --v2:#A3AEFF; --v2-soft:#262E5E;
+  --delete:#FF9D94; --delete-soft:#4A2320;
+  --quiet:#F2C063; --quiet-soft:#43330F;
+  --rewrite:#D2A8F5; --rewrite-soft:#3A2752;
+  --good:#7FD3A4; --good-soft:#173A29;
+  --focus:#8FB0FF;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 var(--sans)}
+a{color:var(--v2)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.wrap{max-inline-size:960px;margin-inline:auto;padding-inline:20px}
+bdi.raw,.raw{font-family:var(--mono);font-size:14px}
+
+/* top bar */
+.top{background:var(--surface);border-block-end:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;min-block-size:56px;flex-wrap:wrap}
+.brand{font-weight:700}
+.brand small{font-weight:400;color:var(--muted);font-size:14px;margin-inline-start:6px}
+.spacer{flex:1}
+.btn{font:inherit;font-size:15px;font-weight:600;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;min-block-size:40px;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--v2);color:var(--surface);border-color:var(--v2)}
+
+/* header */
+.crumbs{font-size:14px;color:var(--muted);margin-block:20px 6px}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:34px;line-height:1.15;margin:0;letter-spacing:-.01em}
+.lede{font-size:19px;line-height:1.45;color:var(--ink-2);max-inline-size:62ch;margin-block:10px 0}
+.lede b{color:var(--ink)}
+nav.views{display:flex;gap:4px;margin-block:22px 0;border-block-end:1px solid var(--line);overflow-x:auto}
+nav.views a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;font-size:15px;
+  border-block-end:3px solid transparent;white-space:nowrap}
+nav.views a[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+
+/* popover: the one menu pattern (week menu, standard panel) */
+[popover]{border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--ink);
+  padding:8px;box-shadow:0 12px 32px rgb(0 0 0 / .22)}
+.menu a{display:flex;justify-content:space-between;gap:24px;padding:9px 12px;border-radius:8px;
+  text-decoration:none;color:var(--ink);font-size:15px}
+.menu a:hover{background:var(--sunk)}
+.menu a[aria-current]{font-weight:700}
+.menu a span{color:var(--muted)}
+
+/* the board: one tile per alert */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-block:24px 0}
+.lane{display:grid;grid-template-columns:minmax(0,15rem) 1fr;gap:8px 24px;align-items:center;padding-block:10px}
+.lane + .lane{border-block-start:1px solid var(--line)}
+.lane h2{font-size:16px;margin:0}
+.lane p{margin:2px 0 0;font-size:15px;color:var(--muted)}
+.lane p b{color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+.tiles{display:flex;gap:8px;flex-wrap:wrap}
+.tile{inline-size:44px;block-size:44px;border-radius:9px;display:grid;place-items:center;
+  font-weight:700;font-size:15px;text-decoration:none;border:2px solid transparent}
+.tile:hover{border-color:var(--ink)}
+.tile.delete{background:var(--delete-soft);color:var(--delete)}
+.tile.quiet{background:var(--quiet-soft);color:var(--quiet)}
+.tile.rewrite{background:var(--rewrite-soft);color:var(--rewrite)}
+.tile.good{background:var(--good);color:var(--surface)}
+.legend{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-block:12px 0;
+  padding-block-start:12px;border-block-start:1px solid var(--line)}
+.legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dot{inline-size:12px;block-size:12px;border-radius:3px;display:inline-block}
+.dot.delete{background:var(--delete)}.dot.quiet{background:var(--quiet)}
+.dot.rewrite{background:var(--rewrite)}.dot.good{background:var(--good)}
+
+/* moves */
+h2.sec{font-size:22px;margin-block:36px 4px}
+p.sub{margin:0 0 14px;color:var(--muted);font-size:15px;max-inline-size:68ch}
+ol.moves{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.move{background:var(--surface);border:1px solid var(--line);border-inline-start:5px solid var(--kind);border-radius:12px}
+.move.delete{--kind:var(--delete);--kind-soft:var(--delete-soft)}
+.move.quiet{--kind:var(--quiet);--kind-soft:var(--quiet-soft)}
+.move.rewrite{--kind:var(--rewrite);--kind-soft:var(--rewrite-soft)}
+.move > details > summary{list-style:none;cursor:pointer;padding:18px 20px;display:grid;
+  grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:start}
+.move > details > summary::-webkit-details-marker{display:none}
+.step{inline-size:32px;block-size:32px;border-radius:50%;background:var(--kind-soft);color:var(--kind);
+  display:grid;place-items:center;font-weight:700;font-size:15px}
+.move h3{font-size:19px;line-height:1.3;margin:0}
+.move .why{grid-column:2;margin:0;color:var(--ink-2);font-size:15px;max-inline-size:66ch}
+.gain{grid-column:2;margin:6px 0 0;font-size:15px;font-weight:600;color:var(--kind)}
+.kind{font-size:14px;font-weight:700;color:var(--kind);background:var(--kind-soft);border-radius:999px;
+  padding:3px 11px;white-space:nowrap}
+.open-hint{grid-column:2;font-size:14px;color:var(--muted);margin-block-start:6px}
+details[open] > summary .open-hint .closed,details:not([open]) > summary .open-hint .opened{display:none}
+.body{padding:0 20px 20px;display:grid;gap:14px}
+
+/* rule where it bites */
+.rule{background:var(--sunk);border-radius:10px;padding:12px 16px;font-size:15px}
+.rule b{display:block}
+.linkbtn{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
+
+/* alert card: yours vs the standard */
+.alert{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.alert header{display:flex;gap:8px 12px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;background:var(--sunk)}
+.alert header strong{font-size:15px}
+.alert header span{font-size:14px;color:var(--muted)}
+.schema{font-size:13px;font-weight:700;border:1px solid var(--line-strong);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.schema.v2{color:var(--v2);border-color:var(--v2)}
+table.fix{inline-size:100%;border-collapse:collapse;font-size:15px}
+table.fix th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 14px}
+table.fix td{padding:9px 14px;border-block-start:1px solid var(--line);vertical-align:top}
+table.fix td:first-child{color:var(--muted);white-space:nowrap;inline-size:8.5rem}
+.now{color:var(--delete)}
+.now.empty{font-family:var(--sans);font-style:italic}
+.better{color:var(--good)}
+.note{font-size:14px;color:var(--muted);margin:0;padding:8px 14px 12px}
+ul.plain{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+ul.plain li{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:baseline;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+ul.plain li .n{margin-inline-start:auto;color:var(--muted);font-size:14px;white-space:nowrap}
+
+/* progress + all alerts */
+.weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px}
+.week{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+.week.this{border-color:var(--ink)}
+.week b{display:block;color:var(--ink);font-size:15px}
+.week dl{margin:8px 0 0;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.week dd{margin:0;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table.all{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:640px}
+table.all th{text-align:start;font-size:14px;color:var(--muted);padding:10px 14px;font-weight:600}
+table.all td{padding:10px 14px;border-block-start:1px solid var(--line)}
+table.all td.num{text-align:end;font-variant-numeric:tabular-nums}
+.tag{font-size:14px;font-weight:700;white-space:nowrap}
+.tag.delete{color:var(--delete)}.tag.quiet{color:var(--quiet)}.tag.rewrite{color:var(--rewrite)}.tag.good{color:var(--good)}
+footer{margin-block:40px;color:var(--muted);font-size:14px}
+
+/* standard panel */
+#standard{inline-size:min(560px,100vw - 24px);max-block-size:calc(100vh - 24px);margin-inline:auto 12px;margin-block:12px;padding:0;overflow:auto}
+#standard::backdrop{background:rgb(0 0 0 / .4)}
+#standard header{position:sticky;inset-block-start:0;background:var(--surface);display:flex;align-items:center;
+  gap:12px;padding:16px 20px;border-block-end:1px solid var(--line)}
+#standard h2{font-size:20px;margin:0;flex:1}
+#standard .in{padding:8px 20px 24px}
+#standard p.sub{margin-block:10px 4px}
+.std{padding-block:16px;border-block-end:1px solid var(--line)}
+.std h3{font-size:17px;margin:0 0 2px}
+.std p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
+.ex{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px;align-items:baseline}
+.ex span{font-weight:700}
+.ex .no{color:var(--delete)}.ex .yes{color:var(--good)}
+.std h4{font-size:14px;color:var(--muted);margin:20px 0 0;font-weight:600}
+
+@media (max-width:640px){
+  h1{font-size:27px}.lede{font-size:17px}
+  .lane{grid-template-columns:1fr}
+  .move > details > summary{grid-template-columns:auto 1fr}
+  .kind{grid-column:2;justify-self:start}
+  table.fix td:first-child{inline-size:auto;white-space:normal}
+}
+@media (prefers-reduced-motion:no-preference){.tile{transition:border-color .12s}}
+</style>
+<style>
+:root{--auto:#0E6B74;--auto-soft:#D9F0F2;--hand:#4C5967;--hand-soft:#E3E8ED}
+@media (prefers-color-scheme:dark){:root{--auto:#7AD3DC;--auto-soft:#12383D;--hand:#B4BFCB;--hand-soft:#2A3440}}
+.move.auto{--kind:var(--auto);--kind-soft:var(--auto-soft)}
+.move.hand{--kind:var(--hand);--kind-soft:var(--hand-soft)}
+.dot.auto{background:var(--auto)}.dot.hand{background:var(--hand)}
+.tag.auto{color:var(--auto)}.tag.hand{color:var(--hand)}
+
+/* bar: one segment per kind of work, drawn as SVG so no inline styles are needed */
+.bar{display:block;inline-size:100%;block-size:18px;border-radius:6px;overflow:hidden}
+.bar .delete{fill:var(--delete)}.bar .quiet{fill:var(--quiet)}.bar .auto{fill:var(--auto)}
+.bar .rewrite{fill:var(--rewrite)}.bar .hand{fill:var(--hand)}.bar .good{fill:var(--good)}
+.lane.wide{grid-template-columns:1fr}
+.lane.wide .lane-head{display:flex;gap:8px 16px;align-items:baseline;flex-wrap:wrap}
+.lane.wide .lane-head p{margin:0}
+.counts{display:flex;gap:8px 22px;flex-wrap:wrap;font-size:15px;margin-block-start:10px}
+.counts a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--ink);white-space:nowrap}
+.counts a b{font-variant-numeric:tabular-nums}
+.counts a:hover{text-decoration:underline}
+
+/* start here */
+.start{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.start li{display:grid;grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:center;padding:14px 20px}
+.start li + li{border-block-start:1px solid var(--line)}
+ol.start{list-style:none;margin:0;padding:0}
+.start .what{font-weight:700;font-size:16px}
+.start .what bdi{font-weight:400}
+.start .effect{grid-column:2;font-size:15px;color:var(--muted)}
+.start .btn{grid-row:span 2}
+.pos{inline-size:28px;block-size:28px;border-radius:50%;background:var(--sunk);display:grid;place-items:center;
+  font-weight:700;font-size:14px;grid-row:span 2}
+
+/* groups inside a move: one row per Grafana rule */
+table.groups{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:620px}
+table.groups th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 12px}
+table.groups td{padding:10px 12px;border-block-start:1px solid var(--line);vertical-align:middle}
+table.groups td.num,table.groups th.num{text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.groups .why{display:block;font-size:14px;color:var(--muted)}
+.btn.small{min-block-size:34px;padding:5px 12px;font-size:14px}
+.more{font-size:15px;margin:0}
+.handled{color:var(--auto)}
+.handled.empty{font-style:normal}
+.cause{font-size:16px;margin:8px 0 0}
+
+/* all alerts controls */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-block-end:12px}
+.filters input{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line-strong);border-radius:8px;
+  background:var(--surface);color:var(--ink);flex:1;min-inline-size:14rem;min-block-size:40px}
+.pager{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-block-start:12px;font-size:15px;color:var(--muted)}
+@media (max-width:640px){.start li{grid-template-columns:auto 1fr}.start .btn{grid-column:2;grid-row:auto;justify-self:start}}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="wrap">
+  <span class="brand">Alerts BI<small>Review portal</small></span>
+  <span class="spacer"></span>
+  <button class="btn" popovertarget="standard">The V2 standard</button>
+</div></div>
+
+<main class="wrap">
+  <p class="crumbs"><a href="#">All teams</a> / Data Pipeline / ETL</p>
+  <div class="head">
+    <h1>Data Pipeline / ETL</h1>
+    <span class="spacer"></span>
+    <button class="btn" popovertarget="weeks">Week of 17 – 24 Aug 2026 ▾</button>
+    <div id="weeks" popover class="menu">
+      <a href="#" aria-current="true">17 – 24 Aug 2026</a>
+      <a href="#">10 – 17 Aug 2026</a>
+      <a href="#">3 – 10 Aug 2026</a>
+      <a href="#">All weeks</a>
+    </div>
+  </div>
+  <p class="lede"><b>Of your 764 Appchi alerts, 236 can be deleted and 287 can migrate automatically.</b>
+    166 need a few answers from you first, and they come from only 14 Grafana rules.</p>
+
+  <nav class="views" aria-label="Views">
+    <a href="#" aria-current="page">Action plan</a>
+    <a href="#all">All alerts</a>
+    <a href="#progress">Progress</a>
+    <a href="#">Slides</a>
+  </nav>
+
+  <section class="board" aria-label="Where every alert stands">
+    <div class="lane wide">
+      <div class="lane-head"><h2>Appchi, the old format</h2><p><b>764</b> alerts still here, from 51 Grafana rules and 31 sent by API</p></div>
+      <svg class="bar" viewBox="0 0 764 18" preserveAspectRatio="none" role="img" aria-label="236 delete, 44 quiet, 287 migrate automatically, 166 need your input, 31 by hand">
+        <rect class="delete" x="0" width="235" height="18"/><rect class="quiet" x="236" width="43" height="18"/>
+        <rect class="auto" x="280" width="286" height="18"/><rect class="rewrite" x="567" width="165" height="18"/>
+        <rect class="hand" x="733" width="31" height="18"/>
+      </svg>
+      <div class="counts">
+        <a href="#m-delete"><i class="dot delete"></i><b>236</b> delete</a>
+        <a href="#m-quiet"><i class="dot quiet"></i><b>44</b> quiet first</a>
+        <a href="#m-auto"><i class="dot auto"></i><b>287</b> migrate automatically</a>
+        <a href="#m-input"><i class="dot rewrite"></i><b>166</b> need your input</a>
+        <a href="#m-hand"><i class="dot hand"></i><b>31</b> migrate by hand</a>
+      </div>
+    </div>
+    <div class="lane wide">
+      <div class="lane-head"><h2>Appchi V2, the standard</h2><p><b>29 of 48</b> meet the standard</p></div>
+      <svg class="bar" viewBox="0 0 48 18" preserveAspectRatio="none" role="img" aria-label="29 meet the standard, 11 need your input, 8 delete">
+        <rect class="good" x="0" width="28.8" height="18"/><rect class="rewrite" x="29" width="10.8" height="18"/>
+        <rect class="delete" x="40" width="8" height="18"/>
+      </svg>
+      <div class="counts">
+        <a href="#all"><i class="dot good"></i><b>29</b> meet the standard</a>
+        <a href="#m-input"><i class="dot rewrite"></i><b>11</b> need your input</a>
+        <a href="#m-delete"><i class="dot delete"></i><b>8</b> delete</a>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="sec">Start here this week</h2>
+  <p class="sub">The five fixes that clear the most for the least work. Each one is a single Grafana rule or folder.</p>
+  <ol class="start">
+    <li><span class="pos">1</span>
+      <span class="what">Delete the rule <bdi class="raw" dir="auto">svc-heartbeat</bdi></span>
+      <a class="btn small" href="#">Open in Grafana</a>
+      <span class="effect">Removes 96 alerts that only say a service is alive.</span></li>
+    <li><span class="pos">2</span>
+      <span class="what">Fix the condition of <bdi class="raw" dir="auto">etl-job-status</bdi></span>
+      <a class="btn small" href="#">Open in Grafana</a>
+      <span class="effect">14 alerts were on all week. They made 201,600 of this week's 412,300 Appchi events.</span></li>
+    <li><span class="pos">3</span>
+      <span class="what">Migrate the folder <bdi class="raw" dir="auto">ETL / ingestion</bdi></span>
+      <a class="btn small primary" href="#">Migrate 142 alerts</a>
+      <span class="effect">Nothing to fix first. The migration service moves the fields for you.</span></li>
+    <li><span class="pos">4</span>
+      <span class="what">Answer 3 questions for <bdi class="raw" dir="auto">job-failed-generic</bdi></span>
+      <a class="btn small" href="#g-generic">Answer and migrate</a>
+      <span class="effect">61 alerts say “Error Occurred”. One new message, impact and runbook fixes all of them.</span></li>
+    <li><span class="pos">5</span>
+      <span class="what">Delete the rule <bdi class="raw" dir="auto">pipeline-finished</bdi></span>
+      <a class="btn small" href="#">Open in Grafana</a>
+      <span class="effect">52 alerts your own dashboard already hides.</span></li>
+  </ol>
+
+  <h2 class="sec">The whole plan</h2>
+  <p class="sub">Five moves, in this order, because each one makes the next smaller. Every row is one Grafana rule, so one fix clears all its alerts.</p>
+
+  <ol class="moves">
+    <li class="move delete" id="m-delete"><details open>
+      <summary>
+        <span class="step">1</span>
+        <h3>Delete 236 alerts that don't need migrating</h3>
+        <span class="kind">Delete</span>
+        <p class="why">They report a status, are hidden by your own dashboard, or already have a working V2 version.</p>
+        <p class="gain">13 rules to delete. Appchi drops from 764 alerts to 528.</p>
+        <span class="open-hint"><span class="closed">Show the 13 rules</span><span class="opened">Hide the rules</span></span>
+      </summary>
+      <div class="body">
+        <div class="rule"><b>The rule: an alert reports a problem, never a status.</b>
+          “I am alive” and “completed successfully” belong in logs. Nobody can act on them.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+        <div class="scroll"><table class="groups">
+          <tr><th>Grafana rule</th><th class="num">Alerts</th><th class="num">Events</th><th></th></tr>
+          <tr><td><bdi class="raw" dir="auto">svc-heartbeat</bdi><span class="why">Only says a service is alive · 9 applications</span></td><td class="num">96</td><td class="num">2,304</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">pipeline-finished</bdi><span class="why">Hidden by every panel you own · 4 applications</span></td><td class="num">52</td><td class="num">1,196</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">loader-started</bdi><span class="why">Only says a job started · 6 applications</span></td><td class="num">34</td><td class="num">612</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">warehouse-lag</bdi><span class="why">Already on V2 and meets the standard · switch off the old copy</span></td><td class="num">22</td><td class="num">3,190</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+        </table></div>
+        <p class="more"><a href="#all">Show the other 9 rules (32 alerts)</a></p>
+      </div>
+    </details></li>
+
+    <li class="move quiet" id="m-quiet"><details>
+      <summary>
+        <span class="step">2</span>
+        <h3>Quiet 44 alerts that never clear or flip on and off</h3>
+        <span class="kind">Quiet</span>
+        <p class="why">18 were on for the whole week. 26 cleared and fired again more than 10 times a day.</p>
+        <p class="gain">5 rules to fix. Removes 292,700 of this week's 412,300 Appchi events (71%).</p>
+        <span class="open-hint"><span class="closed">Show the 5 rules</span><span class="opened">Hide the rules</span></span>
+      </summary>
+      <div class="body">
+        <div class="rule"><b>The rule: an alert clears once the problem is handled.</b>
+          If the condition is always true, the threshold is wrong or the problem was never fixed. If it flips, add a wait time before it fires.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+        <div class="scroll"><table class="groups">
+          <tr><th>Grafana rule</th><th class="num">Alerts</th><th class="num">Events</th><th></th></tr>
+          <tr><td><bdi class="raw" dir="auto">etl-job-status</bdi><span class="why">On for 7 of 7 days</span></td><td class="num">14</td><td class="num">201,600</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">kafka-consumer-lag</bdi><span class="why">Clears and fires again about 40 times a day</span></td><td class="num">17</td><td class="num">61,300</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">disk-usage-nodes</bdi><span class="why">Clears and fires again about 12 times a day</span></td><td class="num">9</td><td class="num">18,900</td><td><a class="btn small" href="#">Open in Grafana</a></td></tr>
+        </table></div>
+        <p class="note">Once quiet, these join move 3 or 4 like any other alert.</p>
+      </div>
+    </details></li>
+
+    <li class="move auto" id="m-auto"><details>
+      <summary>
+        <span class="step">3</span>
+        <h3>Migrate 287 alerts automatically</h3>
+        <span class="kind">Migrate</span>
+        <p class="why">Nothing is wrong with these. The migration service moves each field to its V2 place and fills the defaults.</p>
+        <p class="gain">19 rules in 4 Grafana folders. No answers needed from you.</p>
+        <span class="open-hint"><span class="closed">Show the 4 folders</span><span class="opened">Hide the folders</span></span>
+      </summary>
+      <div class="body">
+        <div class="scroll"><table class="groups">
+          <tr><th>Grafana folder</th><th class="num">Rules</th><th class="num">Alerts</th><th></th></tr>
+          <tr><td><bdi class="raw" dir="auto">ETL / ingestion</bdi></td><td class="num">8</td><td class="num">142</td><td><a class="btn small primary" href="#">Migrate folder</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">ETL / warehouse</bdi></td><td class="num">5</td><td class="num">77</td><td><a class="btn small primary" href="#">Migrate folder</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">ETL / streaming</bdi></td><td class="num">4</td><td class="num">51</td><td><a class="btn small primary" href="#">Migrate folder</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">ETL / exports</bdi></td><td class="num">2</td><td class="num">17</td><td><a class="btn small primary" href="#">Migrate folder</a></td></tr>
+        </table></div>
+        <article class="alert">
+          <header><strong>What the migration service does for you</strong><span>the same for every alert in these folders</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Old format</th><th>V2</th></tr>
+            <tr><td>Component</td><td><span class="raw">object</span> label</td><td class="handled">Moved to <span class="raw">component</span></td></tr>
+            <tr><td>Environment</td><td class="now empty">not in the old format</td><td class="handled">Filled from the rule's folder</td></tr>
+            <tr><td>Rule link</td><td>present</td><td class="handled">Carried over</td></tr>
+          </table>
+          <p class="note">“Migrate folder” opens the migration service with this folder already chosen. Nothing changes until you confirm there.</p>
+        </article>
+      </div>
+    </details></li>
+
+    <li class="move rewrite" id="m-input"><details open>
+      <summary>
+        <span class="step">4</span>
+        <h3>Answer a few questions for 166 alerts, then migrate</h3>
+        <span class="kind">Your input</span>
+        <p class="why">The migration service can move these, but it can't guess a clear message, the impact or the runbook.</p>
+        <p class="gain">14 rules. Answer once per rule and every alert from it arrives in V2 correct.</p>
+        <span class="open-hint"><span class="closed">Show the 14 rules</span><span class="opened">Hide the rules</span></span>
+      </summary>
+      <div class="body">
+        <p class="cause"><strong>The message doesn't say what failed</strong> · 94 alerts from 5 rules</p>
+        <div class="rule"><b>The rule: the message says what failed, where, and by how much.</b>
+          Your own rule <bdi class="raw" dir="auto">warehouse-lag</bdi> already does this: <bdi class="raw" dir="auto">Warehouse load lag above 30m for 15m</bdi>.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+
+        <article class="alert" id="g-generic">
+          <header><strong><bdi class="raw" dir="auto">job-failed-generic</bdi></strong><span>61 alerts · 7 applications · 9,840 events</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Yours now</th><th>What good looks like</th></tr>
+            <tr><td>Message</td><td><bdi class="raw now" dir="auto">Error Occurred</bdi></td><td><bdi class="raw better" dir="auto">{{job}} failed 3 runs in a row on {{node}}</bdi></td></tr>
+            <tr><td>Impact</td><td class="now empty">not in the old format</td><td><bdi class="raw better" dir="auto">Reports for {{dataset}} are stale</bdi></td></tr>
+            <tr><td>Runbook</td><td class="now empty">not in the old format</td><td class="better">An https link to the steps to take</td></tr>
+            <tr><td>Component</td><td><span class="raw">object</span> label</td><td class="handled">Handled for you</td></tr>
+            <tr><td>Environment</td><td class="now empty">not in the old format</td><td class="handled">Handled for you</td></tr>
+          </table>
+          <p class="note"><a class="btn small primary" href="#">Answer and migrate</a> &nbsp; <a href="#all">Show the 61 alerts</a></p>
+        </article>
+
+        <div class="scroll"><table class="groups">
+          <tr><th>Other rules with this problem</th><th class="num">Alerts</th><th class="num">Events</th><th></th></tr>
+          <tr><td><bdi class="raw" dir="auto">loader-error</bdi><span class="why">Says “Something went wrong”</span></td><td class="num">18</td><td class="num">2,410</td><td><a class="btn small" href="#">Answer and migrate</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">export-check</bdi><span class="why">Says “Unable to get data”</span></td><td class="num">9</td><td class="num">1,120</td><td><a class="btn small" href="#">Answer and migrate</a></td></tr>
+        </table></div>
+        <p class="more"><a href="#all">Show the other 2 rules (6 alerts)</a></p>
+
+        <p class="cause"><strong>A name is a placeholder</strong> · 72 alerts from 9 rules</p>
+        <div class="scroll"><table class="groups">
+          <tr><th>Grafana rule</th><th class="num">Alerts</th><th class="num">Events</th><th></th></tr>
+          <tr><td><bdi class="raw" dir="auto">stream-backpressure</bdi><span class="why">Component is “Default”</span></td><td class="num">23</td><td class="num">3,050</td><td><a class="btn small" href="#">Answer and migrate</a></td></tr>
+          <tr><td><bdi class="raw" dir="auto">partition-skew</bdi><span class="why">Node is “N/A”</span></td><td class="num">16</td><td class="num">1,870</td><td><a class="btn small" href="#">Answer and migrate</a></td></tr>
+        </table></div>
+        <p class="more"><a href="#all">Show the other 7 rules (33 alerts)</a></p>
+      </div>
+    </details></li>
+
+    <li class="move hand" id="m-hand"><details>
+      <summary>
+        <span class="step">5</span>
+        <h3>Migrate 31 alerts by hand</h3>
+        <span class="kind">By hand</span>
+        <p class="why">These are sent straight by API, not by a Grafana rule, so the migration service can't reach them.</p>
+        <p class="gain">3 applications send them. Change the sender once per application.</p>
+        <span class="open-hint"><span class="closed">Show the 3 applications</span><span class="opened">Hide the applications</span></span>
+      </summary>
+      <div class="body">
+        <div class="scroll"><table class="groups">
+          <tr><th>Application</th><th class="num">Alerts</th><th class="num">Events</th><th></th></tr>
+          <tr><td>airflow-bridge<span class="why">Message and names are fine · add impact and runbook</span></td><td class="num">19</td><td class="num">740</td><td><a class="btn small" href="#all">Show alerts</a></td></tr>
+          <tr><td>dq-checker<span class="why">Says “check failed” · rewrite the message</span></td><td class="num">8</td><td class="num">212</td><td><a class="btn small" href="#all">Show alerts</a></td></tr>
+          <tr><td>legacy-cron<span class="why">Creation time is wrong</span></td><td class="num">4</td><td class="num">96</td><td><a class="btn small" href="#all">Show alerts</a></td></tr>
+        </table></div>
+      </div>
+    </details></li>
+  </ol>
+
+  <h2 class="sec" id="progress">Progress, week by week</h2>
+  <p class="sub">The two formats are counted apart. Rules move faster than alerts, so both are shown.</p>
+  <div class="weeks">
+    <div class="week"><b>27 Jul – 3 Aug</b><dl><dt>Appchi alerts left</dt><dd>871</dd><dt>Appchi rules left</dt><dd>58</dd><dt>V2 meeting standard</dt><dd>12 of 19</dd></dl></div>
+    <div class="week"><b>3 – 10 Aug</b><dl><dt>Appchi alerts left</dt><dd>842</dd><dt>Appchi rules left</dt><dd>56</dd><dt>V2 meeting standard</dt><dd>18 of 27</dd></dl></div>
+    <div class="week"><b>10 – 17 Aug</b><dl><dt>Appchi alerts left</dt><dd>790</dd><dt>Appchi rules left</dt><dd>53</dd><dt>V2 meeting standard</dt><dd>22 of 39</dd></dl></div>
+    <div class="week this"><b>17 – 24 Aug · this week</b><dl><dt>Appchi alerts left</dt><dd>764</dd><dt>Appchi rules left</dt><dd>51</dd><dt>V2 meeting standard</dt><dd>29 of 48</dd></dl></div>
+  </div>
+
+  <h2 class="sec" id="all">All alerts this week</h2>
+  <p class="sub">Every alert, loudest first. Search and filters stay in the link, so you can share exactly what you see.</p>
+  <form class="filters">
+    <input type="search" placeholder="Search message, application or rule" aria-label="Search alerts">
+    <button class="btn" type="button">Format: both ▾</button>
+    <button class="btn" type="button">What to do: any ▾</button>
+    <button class="btn" type="button">Application: all 23 ▾</button>
+  </form>
+  <div class="scroll"><table class="all">
+    <tr><th>Format</th><th>Application</th><th>Message</th><th>Grafana rule</th><th>Events</th><th>What to do</th></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>orders-etl</td><td><bdi class="raw" dir="auto">job status: running</bdi></td><td><bdi class="raw">etl-job-status</bdi></td><td class="num">14,400</td><td><a class="tag quiet" href="#m-quiet">Quiet</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>billing-etl</td><td><bdi class="raw" dir="auto">job status: running</bdi></td><td><bdi class="raw">etl-job-status</bdi></td><td class="num">14,400</td><td><a class="tag quiet" href="#m-quiet">Quiet</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>events-stream</td><td><bdi class="raw" dir="auto">Consumer lag above 50000 for 5m</bdi></td><td><bdi class="raw">kafka-consumer-lag</bdi></td><td class="num">3,606</td><td><a class="tag quiet" href="#m-quiet">Quiet</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>orders-etl</td><td><bdi class="raw" dir="auto">Error Occurred</bdi></td><td><bdi class="raw">job-failed-generic</bdi></td><td class="num">412</td><td><a class="tag rewrite" href="#g-generic">Answer and migrate</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>ingest-api</td><td><bdi class="raw" dir="auto">Ingest error rate above 2% over 10m</bdi></td><td><bdi class="raw">ingest-errors</bdi></td><td class="num">288</td><td><a class="tag auto" href="#m-auto">Migrate automatically</a></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>warehouse</td><td><bdi class="raw" dir="auto">Warehouse load lag above 30m for 15m</bdi></td><td><bdi class="raw">warehouse-lag</bdi></td><td class="num">41</td><td><span class="tag good">Meets the standard</span></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>airflow-bridge</td><td><bdi class="raw" dir="auto">DAG orders_daily failed at task load</bdi></td><td>sent by API</td><td class="num">39</td><td><a class="tag hand" href="#m-hand">Migrate by hand</a></td></tr>
+  </table></div>
+  <div class="pager"><span>Showing 1 – 25 · 764 Appchi alerts and 48 Appchi V2 alerts</span><span><a class="btn small" href="#">Next 25</a></span></div>
+
+  <footer>Mock with invented numbers for a large team; the seeded data has no team this size. Grouping by Grafana rule, the “Migrate” handoff and suggested wording are proposals, not current product output.</footer>
+</main>
+
+<div id="standard" popover>
+  <header><h2>The V2 standard</h2><button class="btn" popovertarget="standard" popovertargetaction="hide">Close</button></header>
+  <div class="in">
+    <p class="sub">A good alert tells the person who receives it what broke, how bad it is, and what to do. Eight rules, each with an example.</p>
+    <div class="std"><h3>Say what failed, where, and by how much</h3>
+      <p>The message alone should be enough to know what is wrong.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Error Occurred</bdi><span class="yes">This</span><bdi class="raw">Warehouse load lag above 30m for 15m</bdi></div></div>
+    <div class="std"><h3>Report a problem, never a status</h3>
+      <p>If nobody has to do anything, it is a log line. Delete the alert.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">i am alive</bdi><span class="yes">This</span><span>No alert at all</span></div></div>
+    <div class="std"><h3>Use real names</h3>
+      <p>Application, component and operator name a real thing someone can find.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Default</bdi><span class="yes">This</span><bdi class="raw">stream-router</bdi></div></div>
+    <div class="std"><h3>Link the rule that fired</h3>
+      <p>The responder opens the Grafana rule in one click. Without it, the alert can't be migrated automatically.</p>
+      <div class="ex"><span class="no">Not this</span><span>No link</span><span class="yes">This</span><bdi class="raw">https://grafana…/alerting/rule/…</bdi></div></div>
+    <div class="std"><h3>Clear when the problem is handled</h3>
+      <p>No alert stays on for days, fires again and again, or flips on and off.</p>
+      <div class="ex"><span class="no">Not this</span><span>On for 7 of 7 days</span><span class="yes">This</span><span>Fires, gets handled, clears</span></div></div>
+    <div class="std"><h3>Don't send what your own dashboard hides</h3>
+      <p>If every panel you own filters an alert out, fix or delete it at the source.</p>
+      <div class="ex"><span class="no">Not this</span><span>A filter that hides the node</span><span class="yes">This</span><span>The alert is gone, the filter too</span></div></div>
+    <h4>Only in V2</h4>
+    <div class="std"><h3>State the impact as what users see</h3>
+      <p>Describe the symptom people experience, not the technical cause.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Queue consumer lag high</bdi><span class="yes">This</span><bdi class="raw">Reports for orders are stale</bdi></div></div>
+    <div class="std"><h3>Give a runbook</h3>
+      <p>An https link to the steps the responder should take.</p>
+      <div class="ex"><span class="no">Not this</span><span>Empty, or “ask the team”</span><span class="yes">This</span><bdi class="raw">https://wiki…/runbooks/etl-jobs</bdi></div></div>
+  </div>
+</div>
+
+</body>
+</html>

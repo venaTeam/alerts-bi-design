@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Senders · Data Pipeline / ETL · Alerts BI admin (mock)</title>
+<style>
+/* One token layer for light and dark. Mock only: no JavaScript, no inline styles,
+   logical properties throughout so the page mirrors under dir="rtl". */
+:root{
+  color-scheme:light dark;
+  --page:#F2F4F7; --surface:#FFFFFF; --sunk:#E9EDF2;
+  --ink:#16202B; --ink-2:#3B4856; --muted:#566371;
+  --line:#D5DBE2; --line-strong:#A9B3BF;
+  --v2:#3646B4; --v2-soft:#E4E7F9;
+  --delete:#A8322B; --delete-soft:#F9E3E0;
+  --quiet:#8A5800; --quiet-soft:#FAEBCB;
+  --rewrite:#6A3A9C; --rewrite-soft:#EFE4F8;
+  --good:#1C6E45; --good-soft:#DCF0E4;
+  --focus:#2F5FD0;
+  --sans:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --page:#10161D; --surface:#19212B; --sunk:#222C38;
+  --ink:#E8EDF2; --ink-2:#C3CCD6; --muted:#9BA7B4;
+  --line:#2F3A47; --line-strong:#4A5868;
+  --v2:#A3AEFF; --v2-soft:#262E5E;
+  --delete:#FF9D94; --delete-soft:#4A2320;
+  --quiet:#F2C063; --quiet-soft:#43330F;
+  --rewrite:#D2A8F5; --rewrite-soft:#3A2752;
+  --good:#7FD3A4; --good-soft:#173A29;
+  --focus:#8FB0FF;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 var(--sans)}
+a{color:var(--v2)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.wrap{max-inline-size:960px;margin-inline:auto;padding-inline:20px}
+bdi.raw,.raw{font-family:var(--mono);font-size:14px}
+
+/* top bar */
+.top{background:var(--surface);border-block-end:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;min-block-size:56px;flex-wrap:wrap}
+.brand{font-weight:700}
+.brand small{font-weight:400;color:var(--muted);font-size:14px;margin-inline-start:6px}
+.spacer{flex:1}
+.btn{font:inherit;font-size:15px;font-weight:600;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;min-block-size:40px;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--v2);color:var(--surface);border-color:var(--v2)}
+
+/* header */
+.crumbs{font-size:14px;color:var(--muted);margin-block:20px 6px}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:34px;line-height:1.15;margin:0;letter-spacing:-.01em}
+.lede{font-size:19px;line-height:1.45;color:var(--ink-2);max-inline-size:62ch;margin-block:10px 0}
+.lede b{color:var(--ink)}
+nav.views{display:flex;gap:4px;margin-block:22px 0;border-block-end:1px solid var(--line);overflow-x:auto}
+nav.views a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;font-size:15px;
+  border-block-end:3px solid transparent;white-space:nowrap}
+nav.views a[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+
+/* popover: the one menu pattern (week menu, standard panel) */
+[popover]{border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--ink);
+  padding:8px;box-shadow:0 12px 32px rgb(0 0 0 / .22)}
+.menu a{display:flex;justify-content:space-between;gap:24px;padding:9px 12px;border-radius:8px;
+  text-decoration:none;color:var(--ink);font-size:15px}
+.menu a:hover{background:var(--sunk)}
+.menu a[aria-current]{font-weight:700}
+.menu a span{color:var(--muted)}
+
+/* the board: one tile per alert */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-block:24px 0}
+.lane{display:grid;grid-template-columns:minmax(0,15rem) 1fr;gap:8px 24px;align-items:center;padding-block:10px}
+.lane + .lane{border-block-start:1px solid var(--line)}
+.lane h2{font-size:16px;margin:0}
+.lane p{margin:2px 0 0;font-size:15px;color:var(--muted)}
+.lane p b{color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+.tiles{display:flex;gap:8px;flex-wrap:wrap}
+.tile{inline-size:44px;block-size:44px;border-radius:9px;display:grid;place-items:center;
+  font-weight:700;font-size:15px;text-decoration:none;border:2px solid transparent}
+.tile:hover{border-color:var(--ink)}
+.tile.delete{background:var(--delete-soft);color:var(--delete)}
+.tile.quiet{background:var(--quiet-soft);color:var(--quiet)}
+.tile.rewrite{background:var(--rewrite-soft);color:var(--rewrite)}
+.tile.good{background:var(--good);color:var(--surface)}
+.legend{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-block:12px 0;
+  padding-block-start:12px;border-block-start:1px solid var(--line)}
+.legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dot{inline-size:12px;block-size:12px;border-radius:3px;display:inline-block}
+.dot.delete{background:var(--delete)}.dot.quiet{background:var(--quiet)}
+.dot.rewrite{background:var(--rewrite)}.dot.good{background:var(--good)}
+
+/* moves */
+h2.sec{font-size:22px;margin-block:36px 4px}
+p.sub{margin:0 0 14px;color:var(--muted);font-size:15px;max-inline-size:68ch}
+ol.moves{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.move{background:var(--surface);border:1px solid var(--line);border-inline-start:5px solid var(--kind);border-radius:12px}
+.move.delete{--kind:var(--delete);--kind-soft:var(--delete-soft)}
+.move.quiet{--kind:var(--quiet);--kind-soft:var(--quiet-soft)}
+.move.rewrite{--kind:var(--rewrite);--kind-soft:var(--rewrite-soft)}
+.move > details > summary{list-style:none;cursor:pointer;padding:18px 20px;display:grid;
+  grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:start}
+.move > details > summary::-webkit-details-marker{display:none}
+.step{inline-size:32px;block-size:32px;border-radius:50%;background:var(--kind-soft);color:var(--kind);
+  display:grid;place-items:center;font-weight:700;font-size:15px}
+.move h3{font-size:19px;line-height:1.3;margin:0}
+.move .why{grid-column:2;margin:0;color:var(--ink-2);font-size:15px;max-inline-size:66ch}
+.gain{grid-column:2;margin:6px 0 0;font-size:15px;font-weight:600;color:var(--kind)}
+.kind{font-size:14px;font-weight:700;color:var(--kind);background:var(--kind-soft);border-radius:999px;
+  padding:3px 11px;white-space:nowrap}
+.open-hint{grid-column:2;font-size:14px;color:var(--muted);margin-block-start:6px}
+details[open] > summary .open-hint .closed,details:not([open]) > summary .open-hint .opened{display:none}
+.body{padding:0 20px 20px;display:grid;gap:14px}
+
+/* rule where it bites */
+.rule{background:var(--sunk);border-radius:10px;padding:12px 16px;font-size:15px}
+.rule b{display:block}
+.linkbtn{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
+
+/* alert card: yours vs the standard */
+.alert{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.alert header{display:flex;gap:8px 12px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;background:var(--sunk)}
+.alert header strong{font-size:15px}
+.alert header span{font-size:14px;color:var(--muted)}
+.schema{font-size:13px;font-weight:700;border:1px solid var(--line-strong);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.schema.v2{color:var(--v2);border-color:var(--v2)}
+table.fix{inline-size:100%;border-collapse:collapse;font-size:15px}
+table.fix th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 14px}
+table.fix td{padding:9px 14px;border-block-start:1px solid var(--line);vertical-align:top}
+table.fix td:first-child{color:var(--muted);white-space:nowrap;inline-size:8.5rem}
+.now{color:var(--delete)}
+.now.empty{font-family:var(--sans);font-style:italic}
+.better{color:var(--good)}
+.note{font-size:14px;color:var(--muted);margin:0;padding:8px 14px 12px}
+ul.plain{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+ul.plain li{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:baseline;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+ul.plain li .n{margin-inline-start:auto;color:var(--muted);font-size:14px;white-space:nowrap}
+
+/* progress + all alerts */
+.weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px}
+.week{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+.week.this{border-color:var(--ink)}
+.week b{display:block;color:var(--ink);font-size:15px}
+.week dl{margin:8px 0 0;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.week dd{margin:0;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table.all{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:640px}
+table.all th{text-align:start;font-size:14px;color:var(--muted);padding:10px 14px;font-weight:600}
+table.all td{padding:10px 14px;border-block-start:1px solid var(--line)}
+table.all td.num{text-align:end;font-variant-numeric:tabular-nums}
+.tag{font-size:14px;font-weight:700;white-space:nowrap}
+.tag.delete{color:var(--delete)}.tag.quiet{color:var(--quiet)}.tag.rewrite{color:var(--rewrite)}.tag.good{color:var(--good)}
+footer{margin-block:40px;color:var(--muted);font-size:14px}
+
+/* standard panel */
+#standard{inline-size:min(560px,100vw - 24px);max-block-size:calc(100vh - 24px);margin-inline:auto 12px;margin-block:12px;padding:0;overflow:auto}
+#standard::backdrop{background:rgb(0 0 0 / .4)}
+#standard header{position:sticky;inset-block-start:0;background:var(--surface);display:flex;align-items:center;
+  gap:12px;padding:16px 20px;border-block-end:1px solid var(--line)}
+#standard h2{font-size:20px;margin:0;flex:1}
+#standard .in{padding:8px 20px 24px}
+#standard p.sub{margin-block:10px 4px}
+.std{padding-block:16px;border-block-end:1px solid var(--line)}
+.std h3{font-size:17px;margin:0 0 2px}
+.std p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
+.ex{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px;align-items:baseline}
+.ex span{font-weight:700}
+.ex .no{color:var(--delete)}.ex .yes{color:var(--good)}
+.std h4{font-size:14px;color:var(--muted);margin:20px 0 0;font-weight:600}
+
+@media (max-width:640px){
+  h1{font-size:27px}.lede{font-size:17px}
+  .lane{grid-template-columns:1fr}
+  .move > details > summary{grid-template-columns:auto 1fr}
+  .kind{grid-column:2;justify-self:start}
+  table.fix td:first-child{inline-size:auto;white-space:normal}
+}
+@media (prefers-reduced-motion:no-preference){.tile{transition:border-color .12s}}
+</style>
+<style>
+body{display:grid;grid-template-columns:232px 1fr;min-block-size:100vh}
+.side{background:#16202B;color:#E8EDF2;padding:22px 16px;display:flex;flex-direction:column;gap:6px}
+.side .brand{color:#fff;margin-block-end:18px;padding-inline:10px}
+.side a{color:#C3CCD6;text-decoration:none;font-weight:600;padding:11px 14px;border-radius:9px;font-size:15px}
+.side a[aria-current]{background:#27323F;color:#fff}
+.main{min-inline-size:0}
+.mockbar{background:var(--quiet-soft);font-size:14px;padding:6px 20px}
+.mockbar button{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;text-decoration:underline;cursor:pointer}
+.page{max-inline-size:1040px;padding:8px 32px 48px}
+.sub2{color:var(--muted);margin:4px 0 0;font-size:15px}
+nav.views button{font:inherit;padding:10px 14px;background:none;border:0;color:var(--muted);font-weight:600;font-size:15px;border-block-end:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.views button[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+.explain{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-block:20px 0;font-size:15px;color:var(--ink-2);max-inline-size:none}
+.explain b{color:var(--ink)}
+h2.sec{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h2.sec .spacer{flex:1}
+ol.rules{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.srule{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:grid;grid-template-columns:auto 1fr auto;gap:6px 16px;align-items:start}
+.srule.fixed{background:var(--sunk);border-style:dashed}
+.ord{inline-size:30px;block-size:30px;border-radius:50%;background:var(--sunk);display:grid;place-items:center;font-weight:700;font-size:14px}
+.srule.fixed .ord{background:var(--surface)}
+.srule h3{margin:0;font-size:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.kindtag{font-size:13px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--v2-soft);color:var(--v2);white-space:nowrap}
+.when{grid-column:2;margin:0;font-size:15px;color:var(--ink-2)}
+.when code,.cond code{font-family:var(--mono);font-size:14px;background:var(--sunk);border-radius:5px;padding:1px 6px}
+.srule.fixed .when code{background:var(--surface)}
+.hits{grid-column:2;margin:0;font-size:15px;font-weight:600}
+.hits.zero,.warn{color:var(--delete)}
+.warn{grid-column:2;margin:0;font-size:14px;font-weight:600}
+.ctl{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btn.small{min-block-size:34px;padding:5px 12px;font-size:14px}
+.btn.icon{padding:5px 10px}
+.btn.danger{color:var(--delete);border-color:var(--delete)}
+.btn[disabled]{opacity:.4;cursor:default}
+table.groups{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:620px}
+table.groups th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 12px}
+table.groups td{padding:10px 12px;border-block-start:1px solid var(--line);vertical-align:middle}
+table.groups .num{text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.groups code{font-family:var(--mono);font-size:14px}
+.empty{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 20px;color:var(--muted);font-size:15px;margin:0}
+/* editor */
+dialog#edit{inline-size:min(760px,100vw - 24px);max-block-size:calc(100vh - 24px);border:1px solid var(--line-strong);border-radius:14px;padding:0;background:var(--page);color:var(--ink)}
+dialog#edit::backdrop{background:rgb(0 0 0 / .45)}
+.e-head{position:sticky;inset-block-start:0;background:var(--surface);border-block-end:1px solid var(--line);padding:16px 22px;display:flex;align-items:center;gap:12px;z-index:1}
+.e-head h2{margin:0;font-size:20px;flex:1}
+.e-body{padding:18px 22px;display:grid;gap:16px}
+.e-foot{position:sticky;inset-block-end:0;background:var(--surface);border-block-start:1px solid var(--line);padding:14px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.panel h3{font-size:16px;margin:0 0 4px}
+.panel p{margin:0 0 10px;font-size:15px;color:var(--ink-2)}
+.panel p:last-child{margin-block-end:0}
+input[type=text],select{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--ink);min-block-size:40px}
+#name{inline-size:100%}
+.kinds{display:grid;gap:8px}
+.kinds label{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;border:1px solid var(--line-strong);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:15px}
+.kinds label span{grid-column:2;font-weight:400;color:var(--muted);font-size:14px}
+.kinds label:has(input:checked){border-color:var(--v2);background:var(--v2-soft)}
+.cond{display:grid;grid-template-columns:10.5rem 9.5rem 1fr auto;gap:8px;margin-block-end:8px;align-items:center}
+.cond input{inline-size:100%;font-family:var(--mono);font-size:14px}
+.and{font-size:14px;color:var(--muted);margin:0 0 8px}
+.preview-n{font-size:17px;font-weight:700;margin:0 0 8px}
+.preview-n.zero{color:var(--delete)}
+#toast{position:fixed;inset-block-end:20px;inset-inline:0;margin-inline:auto;inline-size:fit-content;max-inline-size:calc(100vw - 32px);background:var(--ink);color:var(--page);padding:11px 18px;border-radius:10px;font-size:15px;z-index:50;display:none}
+#toast.on{display:block}
+@media (max-width:760px){body{grid-template-columns:1fr}.side{flex-direction:row;flex-wrap:wrap;padding:10px 14px}.side .brand{margin:0;inline-size:100%}
+  .page{padding-inline:16px}.srule{grid-template-columns:auto 1fr}.ctl{grid-column:2;justify-content:flex-start}.cond{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<aside class="side"><span class="brand">Alerts BI</span><a href="#" aria-current="page">Teams</a><a href="#">Schedule</a><a href="#">Decisions</a></aside>
+<div class="main">
+  <div class="mockbar">Functional mock with invented data. Nothing is saved. <button data-act="reset">Start over</button></div>
+  <div class="page">
+    <p class="crumbs"><a href="#">Teams</a> / Data Pipeline / ETL</p>
+    <h1>Data Pipeline / ETL</h1>
+    <p class="sub2">Weekly · Monday to Monday UTC</p>
+    <nav class="views" aria-label="Team pages"><button>This week</button><button>Operators</button><button aria-current="page">Senders</button></nav>
+    <p class="explain"><b>Every alert counts as coming from a Grafana rule unless a sender rule below says otherwise.</b>
+      Sender rules tell the portal which alerts come from a collector, from a system such as Oracle OEM, or from another provider, so it can group them and review them the right way.
+      Rules are checked from top to bottom, and the first one that matches wins. Numbers are from the week of 17 – 24 Aug 2026.</p>
+    <div id="view"></div>
+  </div>
+</div>
+<dialog id="edit"></dialog>
+<div id="toast" role="status"></div>
+
+<script>
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+// ---------- one week of this team's old-format alerts (invented) ----------
+function buildAlerts(){const A=[],g=rng(42);const pick=a=>a[Math.floor(g()*a.length)];
+  const add=(n,f)=>{for(let i=0;i<n;i++)A.push(f(i))};
+  const apps=['orders-etl','billing-etl','events-stream','ingest-api','warehouse','exports'];
+  add(727,i=>({provider:'grafana',operator:pick(['data-pipeline','dp-team','ETL_TEAM']),application:pick(apps),object:pick(['loader','consumer','scheduler','writer','router']),node_name:'node-'+(1+i%40),message:pick(['Ingest error rate above 2% over 10m','Consumer lag above 50000 for 5m','Error Occurred','job status: running','i am alive'])}));
+  [['Datastore usage on disk',9,'Datastore usage on disk: {n} above 90%','esx-ds-'],['Host connection and power state',5,'Host {n} is not responding','esx-'],['Virtual machine CPU usage',5,'VM {n} CPU usage above 75%','etl-worker-']]
+    .forEach(([o,n,m,p])=>add(n,i=>({provider:'api',operator:'dp-vcenter',application:'vcenter-prod',object:o,node_name:p+(10+i),message:m.replace('{n}',p+(10+i)),expiry:30})));
+  [['Volume space nearly full',5,'Volume {n} space nearly full','vol_etl_0'],['Error EMS received',3,'Error EMS received','cluster-']]
+    .forEach(([o,n,m,p])=>add(n,i=>({provider:'api',operator:'dp-ocum',application:'ocum',object:o,node_name:p+(1+i),message:m.replace('{n}',p+(1+i)),expiry:60})));
+  [['Tablespace usage',3,'Tablespace {n} is 92% full',['USERS','ETL_STAGE','AUDIT']],['Agent unreachable',1,'Agent unreachable',['oemagent-2']]]
+    .forEach(([o,n,m,p])=>add(n,i=>({provider:'api',operator:'data-pipeline',application:'oracle',object:o,node_name:'ora-etl-'+(1+i),message:m.replace('{n}',p[i])})));
+  add(6,i=>({provider:'api',operator:'data-pipeline',application:'veeam',object:'Backup job',node_name:'bkp-'+(1+i),message:`Backup job nightly-${1+i} finished with warnings`,expiry:120}));
+  return A}
+const ALERTS=buildAlerts();
+const FIELDS={operator:'Operator',application:'Application',provider:'Provider',object:'Object',node_name:'Node name',message:'Message'};
+const OPS={is:'is',in:'is one of',starts:'starts with',has:'contains'};
+const KINDS={collector:['Collector','A collector polls a system and re-sends each open alert, with an expiry time. Example: vCenter, OCUM.'],
+  source:['System that sends its own alerts','It fires and clears alerts by itself, through a webhook. Example: Oracle OEM.'],
+  other:['Other provider','Anything else sent straight to the pipeline by API.']};
+const GROUPS={object:'Object',application:'Application',message:'Message'};
+let RULES,nextId;
+function reset(){nextId=3;RULES=[
+  {id:1,name:'vCenter collector',kind:'collector',conds:[{f:'operator',o:'is',v:'dp-vcenter'}],group:'object'},
+  {id:2,name:'OCUM collector',kind:'collector',conds:[{f:'operator',o:'is',v:'dp-ocum'}],group:'object'}];render()}
+// ---------- matching ----------
+const test=(a,c)=>{const x=String(a[c.f]??'').toLowerCase(),v=c.v.trim().toLowerCase();if(!v)return false;
+  return c.o==='is'?x===v:c.o==='in'?v.split(',').map(s=>s.trim()).filter(Boolean).includes(x):c.o==='starts'?x.startsWith(v):x.includes(v)};
+const matches=(a,r)=>r.conds.length>0&&r.conds.every(c=>test(a,c));
+function assign(rules){const by=new Map(rules.map(r=>[r.id,[]]));const rest=[];
+  ALERTS.forEach(a=>{const r=rules.find(r=>matches(a,r));r?by.get(r.id).push(a):rest.push(a)});return{by,rest}}
+const defs=(as,field)=>{const m=new Map();as.forEach(a=>m.set(a[field],(m.get(a[field])||0)+1));return[...m].sort((x,y)=>y[1]-x[1])};
+const condText=r=>r.conds.map(c=>`${FIELDS[c.f]} ${OPS[c.o]} <code>${esc(c.v)}</code>`).join(' and ');
+// ---------- page ----------
+function render(){const {by,rest}=assign(RULES);
+  const grafana=rest.filter(a=>a.provider==='grafana'),loose=rest.filter(a=>a.provider!=='grafana');
+  const items=RULES.map((r,i)=>{const as=by.get(r.id),d=defs(as,r.group),gr=as.filter(a=>a.provider==='grafana').length;
+    return `<li class="srule"><span class="ord">${i+1}</span><h3>${esc(r.name)}<span class="kindtag">${KINDS[r.kind][0]}</span></h3>
+     <span class="ctl"><button class="btn small icon" data-act="up" data-v="${r.id}" ${i===0?'disabled':''} aria-label="Move ${esc(r.name)} up">↑</button>
+       <button class="btn small icon" data-act="down" data-v="${r.id}" ${i===RULES.length-1?'disabled':''} aria-label="Move ${esc(r.name)} down">↓</button>
+       <button class="btn small" data-act="edit" data-v="${r.id}">Edit</button><button class="btn small danger" data-act="del" data-v="${r.id}">Remove</button></span>
+     <p class="when">When ${condText(r)}. Grouped by ${GROUPS[r.group].toLowerCase()}.</p>
+     <p class="hits ${as.length?'':'zero'}">${as.length?`${as.length} alerts this week, in ${d.length} ${d.length===1?'group':'groups'}: ${d.slice(0,3).map(x=>esc(x[0])).join(', ')}${d.length>3?' and '+(d.length-3)+' more':''}`:'Matches no alerts this week. Check the values, or remove it.'}</p>
+     ${gr?`<p class="warn">${gr} of these were sent by Grafana. This rule is probably too wide.</p>`:''}</li>`}).join('');
+  const sug=suggest(loose);
+  document.getElementById('view').innerHTML=`
+   <h2 class="sec">Sender rules<span class="spacer"></span><button class="btn primary" data-act="new">Add a sender rule</button></h2>
+   <ol class="rules">${items}
+     <li class="srule fixed"><span class="ord">${RULES.length+1}</span><h3>Grafana rules<span class="kindtag">Everything else</span></h3><span></span>
+       <p class="when">Any alert no rule above matched. Grouped by its Grafana rule link.</p>
+       <p class="hits">${grafana.length} alerts this week${loose.length?`, plus ${loose.length} that were not sent by Grafana (below)`:''}</p></li></ol>
+   <h2 class="sec">Not sent by Grafana, and no rule matches</h2>
+   ${loose.length?`<p class="sub">${loose.length} alerts have a provider other than Grafana but match no sender rule, so the portal treats them as Grafana rules it can't find. Alerts that share a value are listed together.</p>
+     <div class="scroll"><table class="groups"><tr><th>They share</th><th>Example</th><th class="num">Alerts</th><th></th></tr>
+     ${sug.map((s,i)=>`<tr><td>${FIELDS[s.f]} <code>${esc(s.v)}</code>${s.ttl?'<br><span class="sub2">sent with an expiry time</span>':''}</td><td><bdi class="raw" dir="auto">${esc(s.ex)}</bdi></td><td class="num">${s.n}</td>
+       <td class="num"><button class="btn small" data-act="fromsug" data-v="${i}">Create a rule</button></td></tr>`).join('')}</table></div>`
+    :'<p class="empty">Every alert that was not sent by Grafana is covered by a sender rule.</p>'}
+   <h2 class="sec">What the portal shows</h2>
+   <div class="scroll"><table class="groups"><tr><th>Sender</th><th>Type</th><th class="num">Alerts</th><th class="num">Groups to review</th></tr>
+     ${RULES.map(r=>{const as=by.get(r.id);return `<tr><td>${esc(r.name)}</td><td>${KINDS[r.kind][0]}</td><td class="num">${as.length}</td><td class="num">${defs(as,r.group).length}</td></tr>`}).join('')}
+     <tr><td>Grafana rules</td><td>Everything else</td><td class="num">${rest.length}</td><td class="num">by rule link</td></tr></table></div>
+   <p class="note">Changes are saved to the team registry and apply from the next run. Weeks already analysed keep the rules they ran with.</p>`;
+  window._sug=sug}
+function suggest(loose){const out=[];let left=[...loose];
+  while(left.length){let best=null;['operator','application'].forEach(f=>{defs(left,f).forEach(([v,n])=>{
+      const allOfValue=ALERTS.filter(a=>a[f]===v);const pure=allOfValue.every(a=>a.provider!=='grafana');
+      const score=n+(pure?1000:0);if(!best||score>best.score)best={f,v,n,score,pure}})});
+    const grp=left.filter(a=>a[best.f]===best.v);out.push({f:best.f,v:best.v,n:grp.length,ex:grp[0].message,ttl:grp.some(a=>a.expiry),kind:grp.some(a=>a.expiry)?'collector':'source'});
+    left=left.filter(a=>a[best.f]!==best.v)}
+  return out}
+// ---------- editor ----------
+let D=null;
+function openEdit(rule){D=JSON.parse(JSON.stringify(rule));drawEdit(true);const dlg=document.getElementById('edit');if(!dlg.open)dlg.showModal()}
+function drawEdit(full){const dlg=document.getElementById('edit');
+  if(full)dlg.innerHTML=`<div class="e-head"><h2>${D.id?'Edit sender rule':'Add a sender rule'}</h2><button class="btn" data-act="cancel">Cancel</button></div>
+   <div class="e-body">
+    <div class="panel"><h3><label for="name">Name</label></h3><p>Shown to the team in the portal.</p><input type="text" id="name" value="${esc(D.name)}" placeholder="For example: Oracle OEM"></div>
+    <div class="panel"><h3>What kind of sender is it?</h3><div class="kinds">${Object.entries(KINDS).map(([k,[t,d]])=>`<label><input type="radio" name="kind" value="${k}" ${D.kind===k?'checked':''}>${t}<span>${d}</span></label>`).join('')}</div></div>
+    <div class="panel"><h3>Which alerts belong to it?</h3><p>An alert belongs to this sender when every line below is true. Values are matched exactly, including upper and lower case in the registry.</p><div id="conds"></div>
+      <button class="btn small" data-act="addcond">Add a condition</button></div>
+    <div class="panel"><h3><label for="group">Group its alerts by</label></h3><p>One group is one decision for the team. Pick the field that names the alarm, not the host or volume it fired on.</p>
+      <select id="group">${Object.entries(GROUPS).map(([k,v])=>`<option value="${k}" ${D.group===k?'selected':''}>${v}</option>`).join('')}</select></div>
+    <div class="panel" id="preview"></div></div>
+   <div class="e-foot"><button class="btn primary" data-act="save">Save rule</button><span id="savehint" class="sub2"></span></div>`;
+  document.getElementById('conds').innerHTML=D.conds.map((c,i)=>`${i?'<p class="and">and</p>':''}<div class="cond">
+     <select data-c="${i}" data-k="f" aria-label="Field">${Object.entries(FIELDS).map(([k,v])=>`<option value="${k}" ${c.f===k?'selected':''}>${v}</option>`).join('')}</select>
+     <select data-c="${i}" data-k="o" aria-label="Comparison">${Object.entries(OPS).map(([k,v])=>`<option value="${k}" ${c.o===k?'selected':''}>${v}</option>`).join('')}</select>
+     <input type="text" data-c="${i}" data-k="v" value="${esc(c.v)}" placeholder="${c.o==='in'?'value, value':'value'}" aria-label="Value">
+     <button class="btn small danger" data-act="delcond" data-v="${i}" ${D.conds.length===1?'disabled':''}>Remove</button></div>`).join('');
+  drawPreview()}
+function drawPreview(){const others=RULES.filter(r=>r.id!==D.id);const idx=D.id?RULES.findIndex(r=>r.id===D.id):RULES.length;
+  const before=RULES.filter((r,i)=>i<idx&&r.id!==D.id);
+  const mine=ALERTS.filter(a=>matches(a,D));const taken=mine.filter(a=>before.some(r=>matches(a,r)));const got=mine.filter(a=>!taken.includes(a));
+  const gr=got.filter(a=>a.provider==='grafana').length;const d=defs(got,D.group);
+  document.getElementById('preview').innerHTML=`<h3>What this rule catches</h3>
+    <p class="preview-n ${got.length?'':'zero'}">${got.length?`${got.length} alerts this week, in ${d.length} ${d.length===1?'group':'groups'}`:'No alerts this week'}</p>
+    ${taken.length?`<p>${taken.length} more match, but an earlier rule takes them first.</p>`:''}
+    ${gr?`<p class="warn">${gr} of these were sent by Grafana. Add a condition to narrow the rule.</p>`:''}
+    ${d.length?`<div class="scroll"><table class="groups"><tr><th>Group (${GROUPS[D.group].toLowerCase()})</th><th>Example alert</th><th class="num">Alerts</th></tr>
+      ${d.slice(0,6).map(([v,n])=>`<tr><td>${esc(v)}</td><td><bdi class="raw" dir="auto">${esc(got.find(a=>a[D.group]===v).message)}</bdi></td><td class="num">${n}</td></tr>`).join('')}</table></div>
+      ${d.length>6?`<p>${d.length-6} more groups. ${d.length>20?'That is a lot of groups for one sender: try grouping by another field.':''}</p>`:''}`:''}`;
+  const ok=D.name.trim()&&D.conds.every(c=>c.v.trim());document.querySelector('[data-act=save]').disabled=!ok;
+  document.getElementById('savehint').textContent=ok?'':'Give the rule a name and fill in every condition.'}
+// ---------- actions ----------
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('on'),3800)}
+const ACT={
+  reset(){reset();toast('Back to the start.')},
+  new(){openEdit({id:0,name:'',kind:'collector',conds:[{f:'operator',o:'is',v:''}],group:'object'})},
+  edit(v){openEdit(RULES.find(r=>r.id===+v))},
+  fromsug(v){const s=window._sug[+v];openEdit({id:0,name:'',kind:s.kind,conds:[{f:s.f,o:'is',v:s.v}],group:'object'})},
+  del(v){const r=RULES.find(r=>r.id===+v);RULES=RULES.filter(x=>x!==r);render();toast(`Removed “${r.name}”. Its alerts count as Grafana rules again.`)},
+  up(v){const i=RULES.findIndex(r=>r.id===+v);[RULES[i-1],RULES[i]]=[RULES[i],RULES[i-1]];render()},
+  down(v){const i=RULES.findIndex(r=>r.id===+v);[RULES[i+1],RULES[i]]=[RULES[i],RULES[i+1]];render()},
+  addcond(){D.conds.push({f:'application',o:'is',v:''});drawEdit(false)},
+  delcond(v){D.conds.splice(+v,1);drawEdit(false)},
+  cancel(){document.getElementById('edit').close()},
+  save(){if(D.id){RULES[RULES.findIndex(r=>r.id===D.id)]=D}else{D.id=nextId++;RULES.push(D)}document.getElementById('edit').close();render();toast(`Saved “${D.name}”. It applies from the next run.`)},
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;ACT[b.dataset.act](b.dataset.v)});
+document.addEventListener('input',e=>{const t=e.target;if(!D)return;
+  if(t.id==='name'){D.name=t.value;drawPreview()}
+  if(t.dataset.c!==undefined&&t.dataset.k==='v'){D.conds[+t.dataset.c].v=t.value;drawPreview()}});
+document.addEventListener('change',e=>{const t=e.target;if(!D)return;
+  if(t.name==='kind')D.kind=t.value;
+  if(t.id==='group'){D.group=t.value;drawPreview()}
+  if(t.dataset.c!==undefined&&t.dataset.k!=='v'){D.conds[+t.dataset.c][t.dataset.k]=t.value;drawEdit(false)}});
+reset();
+</script>
+</body>
+</html>

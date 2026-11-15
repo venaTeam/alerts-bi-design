@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications Service · Action plan · Alerts BI (mock)</title>
+<style>
+/* One token layer for light and dark. Mock only: no JavaScript, no inline styles,
+   logical properties throughout so the page mirrors under dir="rtl". */
+:root{
+  color-scheme:light dark;
+  --page:#F2F4F7; --surface:#FFFFFF; --sunk:#E9EDF2;
+  --ink:#16202B; --ink-2:#3B4856; --muted:#566371;
+  --line:#D5DBE2; --line-strong:#A9B3BF;
+  --v2:#3646B4; --v2-soft:#E4E7F9;
+  --delete:#A8322B; --delete-soft:#F9E3E0;
+  --quiet:#8A5800; --quiet-soft:#FAEBCB;
+  --rewrite:#6A3A9C; --rewrite-soft:#EFE4F8;
+  --good:#1C6E45; --good-soft:#DCF0E4;
+  --focus:#2F5FD0;
+  --sans:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --page:#10161D; --surface:#19212B; --sunk:#222C38;
+  --ink:#E8EDF2; --ink-2:#C3CCD6; --muted:#9BA7B4;
+  --line:#2F3A47; --line-strong:#4A5868;
+  --v2:#A3AEFF; --v2-soft:#262E5E;
+  --delete:#FF9D94; --delete-soft:#4A2320;
+  --quiet:#F2C063; --quiet-soft:#43330F;
+  --rewrite:#D2A8F5; --rewrite-soft:#3A2752;
+  --good:#7FD3A4; --good-soft:#173A29;
+  --focus:#8FB0FF;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 var(--sans)}
+a{color:var(--v2)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.wrap{max-inline-size:960px;margin-inline:auto;padding-inline:20px}
+bdi.raw,.raw{font-family:var(--mono);font-size:14px}
+
+/* top bar */
+.top{background:var(--surface);border-block-end:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;min-block-size:56px;flex-wrap:wrap}
+.brand{font-weight:700}
+.brand small{font-weight:400;color:var(--muted);font-size:14px;margin-inline-start:6px}
+.spacer{flex:1}
+.btn{font:inherit;font-size:15px;font-weight:600;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;min-block-size:40px;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--v2);color:var(--surface);border-color:var(--v2)}
+
+/* header */
+.crumbs{font-size:14px;color:var(--muted);margin-block:20px 6px}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:34px;line-height:1.15;margin:0;letter-spacing:-.01em}
+.lede{font-size:19px;line-height:1.45;color:var(--ink-2);max-inline-size:62ch;margin-block:10px 0}
+.lede b{color:var(--ink)}
+nav.views{display:flex;gap:4px;margin-block:22px 0;border-block-end:1px solid var(--line);overflow-x:auto}
+nav.views a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;font-size:15px;
+  border-block-end:3px solid transparent;white-space:nowrap}
+nav.views a[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+
+/* popover: the one menu pattern (week menu, standard panel) */
+[popover]{border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--ink);
+  padding:8px;box-shadow:0 12px 32px rgb(0 0 0 / .22)}
+.menu a{display:flex;justify-content:space-between;gap:24px;padding:9px 12px;border-radius:8px;
+  text-decoration:none;color:var(--ink);font-size:15px}
+.menu a:hover{background:var(--sunk)}
+.menu a[aria-current]{font-weight:700}
+.menu a span{color:var(--muted)}
+
+/* the board: one tile per alert */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-block:24px 0}
+.lane{display:grid;grid-template-columns:minmax(0,15rem) 1fr;gap:8px 24px;align-items:center;padding-block:10px}
+.lane + .lane{border-block-start:1px solid var(--line)}
+.lane h2{font-size:16px;margin:0}
+.lane p{margin:2px 0 0;font-size:15px;color:var(--muted)}
+.lane p b{color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+.tiles{display:flex;gap:8px;flex-wrap:wrap}
+.tile{inline-size:44px;block-size:44px;border-radius:9px;display:grid;place-items:center;
+  font-weight:700;font-size:15px;text-decoration:none;border:2px solid transparent}
+.tile:hover{border-color:var(--ink)}
+.tile.delete{background:var(--delete-soft);color:var(--delete)}
+.tile.quiet{background:var(--quiet-soft);color:var(--quiet)}
+.tile.rewrite{background:var(--rewrite-soft);color:var(--rewrite)}
+.tile.good{background:var(--good);color:var(--surface)}
+.legend{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-block:12px 0;
+  padding-block-start:12px;border-block-start:1px solid var(--line)}
+.legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dot{inline-size:12px;block-size:12px;border-radius:3px;display:inline-block}
+.dot.delete{background:var(--delete)}.dot.quiet{background:var(--quiet)}
+.dot.rewrite{background:var(--rewrite)}.dot.good{background:var(--good)}
+
+/* moves */
+h2.sec{font-size:22px;margin-block:36px 4px}
+p.sub{margin:0 0 14px;color:var(--muted);font-size:15px;max-inline-size:68ch}
+ol.moves{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.move{background:var(--surface);border:1px solid var(--line);border-inline-start:5px solid var(--kind);border-radius:12px}
+.move.delete{--kind:var(--delete);--kind-soft:var(--delete-soft)}
+.move.quiet{--kind:var(--quiet);--kind-soft:var(--quiet-soft)}
+.move.rewrite{--kind:var(--rewrite);--kind-soft:var(--rewrite-soft)}
+.move > details > summary{list-style:none;cursor:pointer;padding:18px 20px;display:grid;
+  grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:start}
+.move > details > summary::-webkit-details-marker{display:none}
+.step{inline-size:32px;block-size:32px;border-radius:50%;background:var(--kind-soft);color:var(--kind);
+  display:grid;place-items:center;font-weight:700;font-size:15px}
+.move h3{font-size:19px;line-height:1.3;margin:0}
+.move .why{grid-column:2;margin:0;color:var(--ink-2);font-size:15px;max-inline-size:66ch}
+.gain{grid-column:2;margin:6px 0 0;font-size:15px;font-weight:600;color:var(--kind)}
+.kind{font-size:14px;font-weight:700;color:var(--kind);background:var(--kind-soft);border-radius:999px;
+  padding:3px 11px;white-space:nowrap}
+.open-hint{grid-column:2;font-size:14px;color:var(--muted);margin-block-start:6px}
+details[open] > summary .open-hint .closed,details:not([open]) > summary .open-hint .opened{display:none}
+.body{padding:0 20px 20px;display:grid;gap:14px}
+
+/* rule where it bites */
+.rule{background:var(--sunk);border-radius:10px;padding:12px 16px;font-size:15px}
+.rule b{display:block}
+.linkbtn{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
+
+/* alert card: yours vs the standard */
+.alert{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.alert header{display:flex;gap:8px 12px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;background:var(--sunk)}
+.alert header strong{font-size:15px}
+.alert header span{font-size:14px;color:var(--muted)}
+.schema{font-size:13px;font-weight:700;border:1px solid var(--line-strong);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.schema.v2{color:var(--v2);border-color:var(--v2)}
+table.fix{inline-size:100%;border-collapse:collapse;font-size:15px}
+table.fix th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 14px}
+table.fix td{padding:9px 14px;border-block-start:1px solid var(--line);vertical-align:top}
+table.fix td:first-child{color:var(--muted);white-space:nowrap;inline-size:8.5rem}
+.now{color:var(--delete)}
+.now.empty{font-family:var(--sans);font-style:italic}
+.better{color:var(--good)}
+.note{font-size:14px;color:var(--muted);margin:0;padding:8px 14px 12px}
+ul.plain{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+ul.plain li{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:baseline;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+ul.plain li .n{margin-inline-start:auto;color:var(--muted);font-size:14px;white-space:nowrap}
+
+/* progress + all alerts */
+.weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px}
+.week{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+.week.this{border-color:var(--ink)}
+.week b{display:block;color:var(--ink);font-size:15px}
+.week dl{margin:8px 0 0;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.week dd{margin:0;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table.all{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:640px}
+table.all th{text-align:start;font-size:14px;color:var(--muted);padding:10px 14px;font-weight:600}
+table.all td{padding:10px 14px;border-block-start:1px solid var(--line)}
+table.all td.num{text-align:end;font-variant-numeric:tabular-nums}
+.tag{font-size:14px;font-weight:700;white-space:nowrap}
+.tag.delete{color:var(--delete)}.tag.quiet{color:var(--quiet)}.tag.rewrite{color:var(--rewrite)}.tag.good{color:var(--good)}
+footer{margin-block:40px;color:var(--muted);font-size:14px}
+
+/* standard panel */
+#standard{inline-size:min(560px,100vw - 24px);max-block-size:calc(100vh - 24px);margin-inline:auto 12px;margin-block:12px;padding:0;overflow:auto}
+#standard::backdrop{background:rgb(0 0 0 / .4)}
+#standard header{position:sticky;inset-block-start:0;background:var(--surface);display:flex;align-items:center;
+  gap:12px;padding:16px 20px;border-block-end:1px solid var(--line)}
+#standard h2{font-size:20px;margin:0;flex:1}
+#standard .in{padding:8px 20px 24px}
+#standard p.sub{margin-block:10px 4px}
+.std{padding-block:16px;border-block-end:1px solid var(--line)}
+.std h3{font-size:17px;margin:0 0 2px}
+.std p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
+.ex{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px;align-items:baseline}
+.ex span{font-weight:700}
+.ex .no{color:var(--delete)}.ex .yes{color:var(--good)}
+.std h4{font-size:14px;color:var(--muted);margin:20px 0 0;font-weight:600}
+
+@media (max-width:640px){
+  h1{font-size:27px}.lede{font-size:17px}
+  .lane{grid-template-columns:1fr}
+  .move > details > summary{grid-template-columns:auto 1fr}
+  .kind{grid-column:2;justify-self:start}
+  table.fix td:first-child{inline-size:auto;white-space:normal}
+}
+@media (prefers-reduced-motion:no-preference){.tile{transition:border-color .12s}}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="wrap">
+  <span class="brand">Alerts BI<small>Review portal</small></span>
+  <span class="spacer"></span>
+  <button class="btn" popovertarget="standard">The V2 standard</button>
+</div></div>
+
+<main class="wrap">
+  <p class="crumbs"><a href="#">All teams</a> / Notifications Service</p>
+  <div class="head">
+    <h1>Notifications Service</h1>
+    <span class="spacer"></span>
+    <button class="btn" popovertarget="weeks">Week of 17 – 24 Aug 2026 ▾</button>
+    <div id="weeks" popover class="menu">
+      <a href="#">24 – 31 Aug 2026 <span>not published yet</span></a>
+      <a href="#" aria-current="true">17 – 24 Aug 2026</a>
+      <a href="#">10 – 17 Aug 2026</a>
+      <a href="#">3 – 10 Aug 2026</a>
+    </div>
+  </div>
+  <p class="lede"><b>Seven alerts can go without any migration work.</b> Two stuck alerts made 88% of this
+    week's Appchi events. After that, four alerts need a rewrite to meet the V2 standard.</p>
+
+  <nav class="views" aria-label="Views">
+    <a href="#" aria-current="page">Action plan</a>
+    <a href="#all">All alerts</a>
+    <a href="#progress">Progress</a>
+    <a href="#">Slides</a>
+  </nav>
+
+  <section class="board" aria-label="Where every alert stands">
+    <div class="lane">
+      <div><h2>Appchi, the old format</h2><p><b>8</b> alerts still here</p></div>
+      <div class="tiles">
+        <a class="tile quiet" href="#a-sms" title="sms-gateway · Error Occurred · stop it firing nonstop">Q</a>
+        <a class="tile quiet" href="#a-disp" title="notif-dispatcher · Something went wrong · stop it firing nonstop">Q</a>
+        <a class="tile rewrite" href="#a-default" title="notif-dispatcher · Unable to get data · rewrite">R</a>
+        <a class="tile delete" href="#m-delete" title="email-worker · already has a V2 version · delete">D</a>
+        <a class="tile delete" href="#m-delete" title="notif-dispatcher · already has a V2 version · delete">D</a>
+        <a class="tile delete" href="#m-delete" title="notif-dispatcher · i am alive · delete">D</a>
+        <a class="tile delete" href="#m-delete" title="sms-gateway-test · completed successfully · delete">D</a>
+        <a class="tile delete" href="#m-delete" title="email-worker · service started · delete">D</a>
+      </div>
+    </div>
+    <div class="lane">
+      <div><h2>Appchi V2, the standard</h2><p><b>2 of 5</b> meet the standard</p></div>
+      <div class="tiles">
+        <a class="tile good" href="#all" title="email-worker · Email send failure rate above 5% over 10m · meets the standard">✓</a>
+        <a class="tile good" href="#all" title="notif-dispatcher · Dispatch queue depth above 10000 for 10m · meets the standard">✓</a>
+        <a class="tile rewrite" href="#a-v2" title="notif-dispatcher · Something went wrong · rewrite">R</a>
+        <a class="tile delete" href="#m-delete" title="notif-dispatcher · i am alive · delete">D</a>
+        <a class="tile delete" href="#m-delete" title="email-worker · healthy · delete">D</a>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="dot delete"></i>D · delete, no migration needed</span>
+      <span><i class="dot quiet"></i>Q · quiet it, then rewrite</span>
+      <span><i class="dot rewrite"></i>R · rewrite to the standard</span>
+      <span><i class="dot good"></i>✓ · meets the standard</span>
+    </div>
+  </section>
+
+  <h2 class="sec">Your next moves</h2>
+  <p class="sub">In this order, because each one makes the next smaller. Open a move to see the exact alerts and what good looks like.</p>
+
+  <ol class="moves">
+    <li class="move delete" id="m-delete"><details open>
+      <summary>
+        <span class="step">1</span>
+        <h3>Delete 7 alerts that don't need migrating</h3>
+        <span class="kind">Delete</span>
+        <p class="why">Five only report that something is alive or finished. Two already have a working V2 version.</p>
+        <p class="gain">Appchi drops from 8 alerts to 3. Appchi V2 goes from 2 of 5 to 2 of 3 meeting the standard.</p>
+        <span class="open-hint"><span class="closed">Show the 7 alerts</span><span class="opened">Hide the alerts</span></span>
+      </summary>
+      <div class="body">
+        <div class="rule"><b>The rule: an alert reports a problem, never a status.</b>
+          “I am alive” and “completed successfully” belong in logs. Nobody can act on them.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+        <ul class="plain">
+          <li><span class="schema">Appchi</span><strong>notif-dispatcher</strong><bdi class="raw now" dir="auto">i am alive</bdi><span class="n">12 events · your dashboard already hides it</span></li>
+          <li><span class="schema">Appchi</span><strong>sms-gateway-test</strong><bdi class="raw now" dir="auto">completed successfully</bdi><span class="n">10 events · your dashboard already hides it</span></li>
+          <li><span class="schema">Appchi</span><strong>email-worker</strong><bdi class="raw now" dir="auto">service started</bdi><span class="n">10 events · your dashboard already hides it</span></li>
+          <li><span class="schema v2">Appchi V2</span><strong>notif-dispatcher</strong><bdi class="raw now" dir="auto">i am alive</bdi><span class="n">8 events</span></li>
+          <li><span class="schema v2">Appchi V2</span><strong>email-worker</strong><bdi class="raw now" dir="auto">healthy</bdi><span class="n">6 events</span></li>
+        </ul>
+        <div class="rule"><b>Already migrated: switch off the old copy.</b>
+          These two fire in both formats with the same message. The V2 version meets the standard, so the Appchi one is only duplicate noise.</div>
+        <ul class="plain">
+          <li><span class="schema">Appchi</span><strong>email-worker</strong><bdi class="raw" dir="auto">Email send failure rate above 5% over 10m</bdi><span class="n">145 events</span></li>
+          <li><span class="schema">Appchi</span><strong>notif-dispatcher</strong><bdi class="raw" dir="auto">Dispatch queue depth above 10000 for 10m</bdi><span class="n">145 events</span></li>
+        </ul>
+      </div>
+    </details></li>
+
+    <li class="move quiet" id="m-quiet"><details open>
+      <summary>
+        <span class="step">2</span>
+        <h3>Stop 2 alerts that fired nonstop all week</h3>
+        <span class="kind">Quiet</span>
+        <p class="why">Each fired every 5 minutes for the full 7 days and never cleared. An alert that is always on tells nobody anything.</p>
+        <p class="gain">Removes 4,032 of this week's 4,571 Appchi events (88%).</p>
+        <span class="open-hint"><span class="closed">Show the 2 alerts</span><span class="opened">Hide the alerts</span></span>
+      </summary>
+      <div class="body">
+        <div class="rule"><b>The rule: an alert clears once the problem is handled.</b>
+          If the condition is permanently true, the threshold is wrong or the problem was never fixed. Decide which, then fix the condition.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+        <ul class="plain">
+          <li id="a-sms"><span class="schema">Appchi</span><strong>sms-gateway</strong> sms-send on sms-node-1 <bdi class="raw now" dir="auto">Error Occurred</bdi><span class="n">2,016 events · on for 7 of 7 days</span></li>
+          <li id="a-disp"><span class="schema">Appchi</span><strong>notif-dispatcher</strong> dispatch-queue <bdi class="raw now" dir="auto">Something went wrong</bdi><span class="n">2,016 events · on for 7 of 7 days</span></li>
+        </ul>
+        <p class="note">Both also need a rewrite. They are listed in move 3.</p>
+      </div>
+    </details></li>
+
+    <li class="move rewrite" id="m-rewrite"><details open>
+      <summary>
+        <span class="step">3</span>
+        <h3>Rewrite 4 alerts so they arrive in V2 correct</h3>
+        <span class="kind">Rewrite</span>
+        <p class="why">Their messages don't say what failed. Fix each field below while you move the alert to V2, so you only touch it once.</p>
+        <p class="gain">After this, every alert you own is on V2 and meets the standard.</p>
+        <span class="open-hint"><span class="closed">Show the 4 alerts</span><span class="opened">Hide the alerts</span></span>
+      </summary>
+      <div class="body">
+        <div class="rule"><b>The rule: the message says what failed, where, and by how much.</b>
+          Your own alert <bdi class="raw" dir="auto">Dispatch queue depth above 10000 for 10m</bdi> already does this.
+          <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>
+
+        <article class="alert" id="a-disp-rw">
+          <header><span class="schema">Appchi</span><strong>notif-dispatcher</strong><span>dispatch-queue · 2,016 events</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Yours now</th><th>What good looks like</th></tr>
+            <tr><td>Message</td><td><bdi class="raw now" dir="auto">Something went wrong</bdi></td><td><bdi class="raw better" dir="auto">Dispatch retries above 500 per minute for 10m</bdi></td></tr>
+            <tr><td>Rule link</td><td class="now empty">missing</td><td class="better">Link to the Grafana rule that fires it</td></tr>
+            <tr><td>Impact <span class="schema v2">V2</span></td><td class="now empty">not in the old format</td><td><bdi class="raw better" dir="auto">Customers get notifications late</bdi></td></tr>
+            <tr><td>Runbook <span class="schema v2">V2</span></td><td class="now empty">not in the old format</td><td class="better">An https link to the steps to take</td></tr>
+          </table>
+          <p class="note">Suggested wording is a starting point written from your alert's own fields. Check the numbers against the real condition.</p>
+        </article>
+
+        <article class="alert" id="a-sms-rw">
+          <header><span class="schema">Appchi</span><strong>sms-gateway</strong><span>sms-send on sms-node-1 · 2,016 events</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Yours now</th><th>What good looks like</th></tr>
+            <tr><td>Message</td><td><bdi class="raw now" dir="auto">Error Occurred</bdi></td><td><bdi class="raw better" dir="auto">SMS send failure rate above 5% over 10m</bdi></td></tr>
+            <tr><td>Rule link</td><td class="now empty">missing</td><td class="better">Link to the Grafana rule that fires it</td></tr>
+            <tr><td>Impact <span class="schema v2">V2</span></td><td class="now empty">not in the old format</td><td><bdi class="raw better" dir="auto">Customers don't receive SMS codes</bdi></td></tr>
+            <tr><td>Runbook <span class="schema v2">V2</span></td><td class="now empty">not in the old format</td><td class="better">An https link to the steps to take</td></tr>
+          </table>
+        </article>
+
+        <article class="alert" id="a-default">
+          <header><span class="schema">Appchi</span><strong>notif-dispatcher</strong><span>217 events</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Yours now</th><th>What good looks like</th></tr>
+            <tr><td>Message</td><td><bdi class="raw now" dir="auto">Unable to get data</bdi></td><td class="better">Which data, from where, for how long</td></tr>
+            <tr><td>Component</td><td><bdi class="raw now" dir="auto">Default</bdi></td><td class="better">The real component, such as <bdi class="raw" dir="auto">dispatch-queue</bdi></td></tr>
+            <tr><td>Node</td><td><bdi class="raw now" dir="auto">N/A</bdi></td><td class="better">The node it fired on, or leave it out</td></tr>
+            <tr><td>Rule link</td><td class="now empty">missing</td><td class="better">Link to the Grafana rule that fires it</td></tr>
+          </table>
+        </article>
+
+        <article class="alert" id="a-v2">
+          <header><span class="schema v2">Appchi V2</span><strong>notif-dispatcher</strong><span>dispatch-queue · production · 1 event</span></header>
+          <table class="fix">
+            <tr><th>Field</th><th>Yours now</th><th>What good looks like</th></tr>
+            <tr><td>Message</td><td><bdi class="raw now" dir="auto">Something went wrong</bdi></td><td><bdi class="raw better" dir="auto">Dispatch retries above 500 per minute for 10m</bdi></td></tr>
+            <tr><td>Impact</td><td class="now empty">empty</td><td><bdi class="raw better" dir="auto">Customers get notifications late</bdi></td></tr>
+            <tr><td>Runbook</td><td class="now empty">empty</td><td class="better">An https link to the steps to take</td></tr>
+          </table>
+          <p class="note">This one was moved to V2 with its old message. Fix it here before the Appchi copy is rewritten the same way.</p>
+        </article>
+      </div>
+    </details></li>
+  </ol>
+
+  <h2 class="sec" id="progress">Progress, week by week</h2>
+  <p class="sub">The two formats are counted apart. Weeks are the six most recent; older ones are under All weeks.</p>
+  <div class="weeks">
+    <div class="week"><b>3 – 10 Aug</b><dl><dt>Appchi left</dt><dd>1</dd><dt>V2 meeting standard</dt><dd>1 of 1</dd></dl></div>
+    <div class="week"><b>10 – 17 Aug</b><dl><dt>Appchi left</dt><dd>5</dd><dt>V2 meeting standard</dt><dd>1 of 2</dd></dl></div>
+    <div class="week this"><b>17 – 24 Aug · this week</b><dl><dt>Appchi left</dt><dd>8</dd><dt>V2 meeting standard</dt><dd>2 of 5</dd></dl></div>
+  </div>
+
+  <h2 class="sec" id="all">All alerts this week</h2>
+  <p class="sub">Every alert, loudest first. Each row links to its place in the plan.</p>
+  <div class="scroll"><table class="all">
+    <tr><th>Format</th><th>Application</th><th>Message</th><th>Events</th><th>What to do</th></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>sms-gateway</td><td><bdi class="raw" dir="auto">Error Occurred</bdi></td><td class="num">2,016</td><td><a class="tag quiet" href="#a-sms">Quiet, then rewrite</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">Something went wrong</bdi></td><td class="num">2,016</td><td><a class="tag quiet" href="#a-disp">Quiet, then rewrite</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">Unable to get data</bdi></td><td class="num">217</td><td><a class="tag rewrite" href="#a-default">Rewrite</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>email-worker</td><td><bdi class="raw" dir="auto">Email send failure rate above 5% over 10m</bdi></td><td class="num">145</td><td><a class="tag delete" href="#m-delete">Delete, V2 version exists</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">Dispatch queue depth above 10000 for 10m</bdi></td><td class="num">145</td><td><a class="tag delete" href="#m-delete">Delete, V2 version exists</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">i am alive</bdi></td><td class="num">12</td><td><a class="tag delete" href="#m-delete">Delete</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>sms-gateway-test</td><td><bdi class="raw" dir="auto">completed successfully</bdi></td><td class="num">10</td><td><a class="tag delete" href="#m-delete">Delete</a></td></tr>
+    <tr><td><span class="schema">Appchi</span></td><td>email-worker</td><td><bdi class="raw" dir="auto">service started</bdi></td><td class="num">10</td><td><a class="tag delete" href="#m-delete">Delete</a></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">i am alive</bdi></td><td class="num">8</td><td><a class="tag delete" href="#m-delete">Delete</a></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>email-worker</td><td><bdi class="raw" dir="auto">healthy</bdi></td><td class="num">6</td><td><a class="tag delete" href="#m-delete">Delete</a></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>email-worker</td><td><bdi class="raw" dir="auto">Email send failure rate above 5% over 10m</bdi></td><td class="num">2</td><td><span class="tag good">Meets the standard</span></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">Dispatch queue depth above 10000 for 10m</bdi></td><td class="num">2</td><td><span class="tag good">Meets the standard</span></td></tr>
+    <tr><td><span class="schema v2">Appchi V2</span></td><td>notif-dispatcher</td><td><bdi class="raw" dir="auto">Something went wrong</bdi></td><td class="num">1</td><td><a class="tag rewrite" href="#a-v2">Rewrite</a></td></tr>
+  </table></div>
+
+  <footer>Mock built from the seeded Notifications Service week ending 24 Aug 2026. Suggested wording and the “V2 version exists” match are proposals, not current product output.</footer>
+</main>
+
+<div id="standard" popover>
+  <header><h2>The V2 standard</h2><button class="btn" popovertarget="standard" popovertargetaction="hide">Close</button></header>
+  <div class="in">
+    <p class="sub">A good alert tells the person who receives it what broke, how bad it is, and what to do. Eight rules, each with an example.</p>
+
+    <div class="std" id="std-message"><h3>Say what failed, where, and by how much</h3>
+      <p>The message alone should be enough to know what is wrong.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Error Occurred</bdi><span class="yes">This</span><bdi class="raw">Email send failure rate above 5% over 10m</bdi></div></div>
+    <div class="std" id="std-status"><h3>Report a problem, never a status</h3>
+      <p>If nobody has to do anything, it is a log line. Delete the alert.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">i am alive</bdi><span class="yes">This</span><span>No alert at all</span></div></div>
+    <div class="std"><h3>Use real names</h3>
+      <p>Application, component and operator name a real thing someone can find.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Default</bdi><span class="yes">This</span><bdi class="raw">dispatch-queue</bdi></div></div>
+    <div class="std"><h3>Link the rule that fired</h3>
+      <p>The responder opens the Grafana rule in one click.</p>
+      <div class="ex"><span class="no">Not this</span><span>No link</span><span class="yes">This</span><bdi class="raw">https://grafana…/alerting/rule/…</bdi></div></div>
+    <div class="std" id="std-pattern"><h3>Clear when the problem is handled</h3>
+      <p>No alert stays on for days, fires again and again, or flips on and off.</p>
+      <div class="ex"><span class="no">Not this</span><span>On for 7 of 7 days</span><span class="yes">This</span><span>Fires, gets handled, clears</span></div></div>
+    <div class="std"><h3>Don't send what your own dashboard hides</h3>
+      <p>If every panel you own filters an alert out, fix or delete it at the source.</p>
+      <div class="ex"><span class="no">Not this</span><span>A filter that hides the node</span><span class="yes">This</span><span>The alert is gone, the filter too</span></div></div>
+
+    <h4>Only in V2</h4>
+    <div class="std"><h3>State the impact as what users see</h3>
+      <p>Describe the symptom people experience, not the technical cause.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Queue consumer lag high</bdi><span class="yes">This</span><bdi class="raw">Customers get notifications late</bdi></div></div>
+    <div class="std"><h3>Give a runbook</h3>
+      <p>An https link to the steps the responder should take.</p>
+      <div class="ex"><span class="no">Not this</span><span>Empty, or “ask the team”</span><span class="yes">This</span><bdi class="raw">https://wiki…/runbooks/dispatch-queue</bdi></div></div>
+  </div>
+</div>
+
+</body>
+</html>

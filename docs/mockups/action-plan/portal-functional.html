@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Pipeline / ETL · Alerts BI (functional mock)</title>
+<style>
+/* One token layer for light and dark. Mock only: no JavaScript, no inline styles,
+   logical properties throughout so the page mirrors under dir="rtl". */
+:root{
+  color-scheme:light dark;
+  --page:#F2F4F7; --surface:#FFFFFF; --sunk:#E9EDF2;
+  --ink:#16202B; --ink-2:#3B4856; --muted:#566371;
+  --line:#D5DBE2; --line-strong:#A9B3BF;
+  --v2:#3646B4; --v2-soft:#E4E7F9;
+  --delete:#A8322B; --delete-soft:#F9E3E0;
+  --quiet:#8A5800; --quiet-soft:#FAEBCB;
+  --rewrite:#6A3A9C; --rewrite-soft:#EFE4F8;
+  --good:#1C6E45; --good-soft:#DCF0E4;
+  --focus:#2F5FD0;
+  --sans:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --page:#10161D; --surface:#19212B; --sunk:#222C38;
+  --ink:#E8EDF2; --ink-2:#C3CCD6; --muted:#9BA7B4;
+  --line:#2F3A47; --line-strong:#4A5868;
+  --v2:#A3AEFF; --v2-soft:#262E5E;
+  --delete:#FF9D94; --delete-soft:#4A2320;
+  --quiet:#F2C063; --quiet-soft:#43330F;
+  --rewrite:#D2A8F5; --rewrite-soft:#3A2752;
+  --good:#7FD3A4; --good-soft:#173A29;
+  --focus:#8FB0FF;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 var(--sans)}
+a{color:var(--v2)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.wrap{max-inline-size:960px;margin-inline:auto;padding-inline:20px}
+bdi.raw,.raw{font-family:var(--mono);font-size:14px}
+
+/* top bar */
+.top{background:var(--surface);border-block-end:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;min-block-size:56px;flex-wrap:wrap}
+.brand{font-weight:700}
+.brand small{font-weight:400;color:var(--muted);font-size:14px;margin-inline-start:6px}
+.spacer{flex:1}
+.btn{font:inherit;font-size:15px;font-weight:600;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;min-block-size:40px;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--v2);color:var(--surface);border-color:var(--v2)}
+
+/* header */
+.crumbs{font-size:14px;color:var(--muted);margin-block:20px 6px}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:34px;line-height:1.15;margin:0;letter-spacing:-.01em}
+.lede{font-size:19px;line-height:1.45;color:var(--ink-2);max-inline-size:62ch;margin-block:10px 0}
+.lede b{color:var(--ink)}
+nav.views{display:flex;gap:4px;margin-block:22px 0;border-block-end:1px solid var(--line);overflow-x:auto}
+nav.views a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;font-size:15px;
+  border-block-end:3px solid transparent;white-space:nowrap}
+nav.views a[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+
+/* popover: the one menu pattern (week menu, standard panel) */
+[popover]{border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--ink);
+  padding:8px;box-shadow:0 12px 32px rgb(0 0 0 / .22)}
+.menu a{display:flex;justify-content:space-between;gap:24px;padding:9px 12px;border-radius:8px;
+  text-decoration:none;color:var(--ink);font-size:15px}
+.menu a:hover{background:var(--sunk)}
+.menu a[aria-current]{font-weight:700}
+.menu a span{color:var(--muted)}
+
+/* the board: one tile per alert */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-block:24px 0}
+.lane{display:grid;grid-template-columns:minmax(0,15rem) 1fr;gap:8px 24px;align-items:center;padding-block:10px}
+.lane + .lane{border-block-start:1px solid var(--line)}
+.lane h2{font-size:16px;margin:0}
+.lane p{margin:2px 0 0;font-size:15px;color:var(--muted)}
+.lane p b{color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+.tiles{display:flex;gap:8px;flex-wrap:wrap}
+.tile{inline-size:44px;block-size:44px;border-radius:9px;display:grid;place-items:center;
+  font-weight:700;font-size:15px;text-decoration:none;border:2px solid transparent}
+.tile:hover{border-color:var(--ink)}
+.tile.delete{background:var(--delete-soft);color:var(--delete)}
+.tile.quiet{background:var(--quiet-soft);color:var(--quiet)}
+.tile.rewrite{background:var(--rewrite-soft);color:var(--rewrite)}
+.tile.good{background:var(--good);color:var(--surface)}
+.legend{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-block:12px 0;
+  padding-block-start:12px;border-block-start:1px solid var(--line)}
+.legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dot{inline-size:12px;block-size:12px;border-radius:3px;display:inline-block}
+.dot.delete{background:var(--delete)}.dot.quiet{background:var(--quiet)}
+.dot.rewrite{background:var(--rewrite)}.dot.good{background:var(--good)}
+
+/* moves */
+h2.sec{font-size:22px;margin-block:36px 4px}
+p.sub{margin:0 0 14px;color:var(--muted);font-size:15px;max-inline-size:68ch}
+ol.moves{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.move{background:var(--surface);border:1px solid var(--line);border-inline-start:5px solid var(--kind);border-radius:12px}
+.move.delete{--kind:var(--delete);--kind-soft:var(--delete-soft)}
+.move.quiet{--kind:var(--quiet);--kind-soft:var(--quiet-soft)}
+.move.rewrite{--kind:var(--rewrite);--kind-soft:var(--rewrite-soft)}
+.move > details > summary{list-style:none;cursor:pointer;padding:18px 20px;display:grid;
+  grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:start}
+.move > details > summary::-webkit-details-marker{display:none}
+.step{inline-size:32px;block-size:32px;border-radius:50%;background:var(--kind-soft);color:var(--kind);
+  display:grid;place-items:center;font-weight:700;font-size:15px}
+.move h3{font-size:19px;line-height:1.3;margin:0}
+.move .why{grid-column:2;margin:0;color:var(--ink-2);font-size:15px;max-inline-size:66ch}
+.gain{grid-column:2;margin:6px 0 0;font-size:15px;font-weight:600;color:var(--kind)}
+.kind{font-size:14px;font-weight:700;color:var(--kind);background:var(--kind-soft);border-radius:999px;
+  padding:3px 11px;white-space:nowrap}
+.open-hint{grid-column:2;font-size:14px;color:var(--muted);margin-block-start:6px}
+details[open] > summary .open-hint .closed,details:not([open]) > summary .open-hint .opened{display:none}
+.body{padding:0 20px 20px;display:grid;gap:14px}
+
+/* rule where it bites */
+.rule{background:var(--sunk);border-radius:10px;padding:12px 16px;font-size:15px}
+.rule b{display:block}
+.linkbtn{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
+
+/* alert card: yours vs the standard */
+.alert{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.alert header{display:flex;gap:8px 12px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;background:var(--sunk)}
+.alert header strong{font-size:15px}
+.alert header span{font-size:14px;color:var(--muted)}
+.schema{font-size:13px;font-weight:700;border:1px solid var(--line-strong);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.schema.v2{color:var(--v2);border-color:var(--v2)}
+table.fix{inline-size:100%;border-collapse:collapse;font-size:15px}
+table.fix th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 14px}
+table.fix td{padding:9px 14px;border-block-start:1px solid var(--line);vertical-align:top}
+table.fix td:first-child{color:var(--muted);white-space:nowrap;inline-size:8.5rem}
+.now{color:var(--delete)}
+.now.empty{font-family:var(--sans);font-style:italic}
+.better{color:var(--good)}
+.note{font-size:14px;color:var(--muted);margin:0;padding:8px 14px 12px}
+ul.plain{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+ul.plain li{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:baseline;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+ul.plain li .n{margin-inline-start:auto;color:var(--muted);font-size:14px;white-space:nowrap}
+
+/* progress + all alerts */
+.weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px}
+.week{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+.week.this{border-color:var(--ink)}
+.week b{display:block;color:var(--ink);font-size:15px}
+.week dl{margin:8px 0 0;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.week dd{margin:0;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table.all{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:640px}
+table.all th{text-align:start;font-size:14px;color:var(--muted);padding:10px 14px;font-weight:600}
+table.all td{padding:10px 14px;border-block-start:1px solid var(--line)}
+table.all td.num{text-align:end;font-variant-numeric:tabular-nums}
+.tag{font-size:14px;font-weight:700;white-space:nowrap}
+.tag.delete{color:var(--delete)}.tag.quiet{color:var(--quiet)}.tag.rewrite{color:var(--rewrite)}.tag.good{color:var(--good)}
+footer{margin-block:40px;color:var(--muted);font-size:14px}
+
+/* standard panel */
+#standard{inline-size:min(560px,100vw - 24px);max-block-size:calc(100vh - 24px);margin-inline:auto 12px;margin-block:12px;padding:0;overflow:auto}
+#standard::backdrop{background:rgb(0 0 0 / .4)}
+#standard header{position:sticky;inset-block-start:0;background:var(--surface);display:flex;align-items:center;
+  gap:12px;padding:16px 20px;border-block-end:1px solid var(--line)}
+#standard h2{font-size:20px;margin:0;flex:1}
+#standard .in{padding:8px 20px 24px}
+#standard p.sub{margin-block:10px 4px}
+.std{padding-block:16px;border-block-end:1px solid var(--line)}
+.std h3{font-size:17px;margin:0 0 2px}
+.std p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
+.ex{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px;align-items:baseline}
+.ex span{font-weight:700}
+.ex .no{color:var(--delete)}.ex .yes{color:var(--good)}
+.std h4{font-size:14px;color:var(--muted);margin:20px 0 0;font-weight:600}
+
+@media (max-width:640px){
+  h1{font-size:27px}.lede{font-size:17px}
+  .lane{grid-template-columns:1fr}
+  .move > details > summary{grid-template-columns:auto 1fr}
+  .kind{grid-column:2;justify-self:start}
+  table.fix td:first-child{inline-size:auto;white-space:normal}
+}
+@media (prefers-reduced-motion:no-preference){.tile{transition:border-color .12s}}
+</style>
+<style>
+:root{--auto:#0E6B74;--auto-soft:#D9F0F2;--hand:#4C5967;--hand-soft:#E3E8ED;--shadow:#2B5C9E;--shadow-soft:#DDE9F8}
+@media (prefers-color-scheme:dark){:root{--auto:#7AD3DC;--auto-soft:#12383D;--hand:#B4BFCB;--hand-soft:#2A3440;--shadow:#9CC4FF;--shadow-soft:#1B3050}}
+.mockbar{background:var(--quiet-soft);color:var(--ink);font-size:14px;padding:6px 0;text-align:center}
+.mockbar button{font:inherit;font-weight:600;color:var(--v2);background:none;border:0;text-decoration:underline;cursor:pointer}
+.move.auto{--kind:var(--auto);--kind-soft:var(--auto-soft)}
+.move.hand{--kind:var(--hand);--kind-soft:var(--hand-soft)}
+.move.shadow{--kind:var(--shadow);--kind-soft:var(--shadow-soft)}
+.dot.auto{background:var(--auto)}.dot.hand{background:var(--hand)}.dot.shadow{background:var(--shadow)}.dot.done{background:var(--line-strong)}
+.tag.auto{color:var(--auto)}.tag.hand{color:var(--hand)}.tag.shadow{color:var(--shadow)}.tag.cutover{color:var(--hand)}.tag.done{color:var(--muted)}
+.bar{display:block;inline-size:100%;block-size:20px;border-radius:6px;overflow:hidden;background:var(--sunk)}
+.bar rect{cursor:pointer}
+.bar .delete{fill:var(--delete)}.bar .quiet{fill:var(--quiet)}.bar .auto{fill:var(--auto)}.bar .input{fill:var(--rewrite)}
+.bar .hand{fill:var(--hand)}.bar .cutover{fill:var(--hand);opacity:.55}.bar .good{fill:var(--good)}.bar .shadow{fill:var(--shadow)}.bar .done{fill:var(--line-strong)}
+.lane.wide{grid-template-columns:1fr}
+.lane-head{display:flex;gap:8px 16px;align-items:baseline;flex-wrap:wrap}
+.lane-head p{margin:0}
+.counts{display:flex;gap:8px 22px;flex-wrap:wrap;font-size:15px;margin-block-start:10px}
+.counts button{font:inherit;display:inline-flex;align-items:center;gap:7px;color:var(--ink);background:none;border:0;padding:2px 0;cursor:pointer;white-space:nowrap}
+.counts button:hover{text-decoration:underline}
+.counts b{font-variant-numeric:tabular-nums}
+nav.views button{font:inherit;padding:10px 14px;background:none;border:0;color:var(--muted);font-weight:600;font-size:15px;
+  border-block-end:3px solid transparent;white-space:nowrap;cursor:pointer}
+nav.views button[aria-current]{color:var(--ink);border-block-end-color:var(--ink)}
+nav.views .n{font-weight:700;font-size:13px;background:var(--sunk);border-radius:999px;padding:1px 8px;margin-inline-start:4px}
+ol.start{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.start li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 16px;align-items:center;padding:14px 20px}
+.start li + li{border-block-start:1px solid var(--line)}
+.start .what{font-weight:700}
+.start .effect{grid-column:2;font-size:15px;color:var(--muted)}
+.start .btn,.pos{grid-row:span 2}
+.pos{inline-size:28px;block-size:28px;border-radius:50%;background:var(--sunk);display:grid;place-items:center;font-weight:700;font-size:14px}
+table.groups{inline-size:100%;border-collapse:collapse;font-size:15px;min-inline-size:600px}
+table.groups th{text-align:start;font-size:14px;color:var(--muted);font-weight:600;padding:8px 12px}
+table.groups td{padding:10px 12px;border-block-start:1px solid var(--line);vertical-align:middle}
+table.groups .num{text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.groups .why{display:block;font-size:14px;color:var(--muted)}
+table.groups tr.sub td{background:var(--sunk)}
+.btn.small{min-block-size:34px;padding:5px 12px;font-size:14px}
+.btn.danger{color:var(--delete);border-color:var(--delete)}
+.linkbtn.name{font-family:var(--mono);font-size:14px;color:var(--ink)}
+.cause{font-size:16px;margin:8px 0 0}
+.empty-note{padding:14px 20px;color:var(--muted);font-size:15px;margin:0}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-block-end:12px}
+.filters input,.filters select,.field textarea,.field select{font:inherit;font-size:15px;padding:8px 12px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--surface);color:var(--ink);min-block-size:40px}
+.filters input{flex:1;min-inline-size:14rem}
+.pager{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-block-start:12px;font-size:15px;color:var(--muted)}
+/* phase track */
+ol.phases{list-style:none;margin:0 0 20px;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+ol.phases li{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+ol.phases li b{display:block;color:var(--ink);font-size:15px}
+ol.phases li.now{border:2px solid var(--v2)}
+ol.phases li.past b::after{content:" ✓";color:var(--good)}
+/* drawer */
+dialog#drawer{inline-size:min(680px,100vw);max-inline-size:100vw;block-size:100vh;max-block-size:100vh;margin:0;margin-inline-start:auto;
+  border:0;border-inline-start:1px solid var(--line-strong);padding:0;background:var(--page);color:var(--ink)}
+dialog#drawer::backdrop{background:rgb(0 0 0 / .45)}
+.d-head{position:sticky;inset-block-start:0;z-index:1;background:var(--surface);border-block-end:1px solid var(--line);padding:16px 22px;display:flex;gap:12px;align-items:flex-start}
+.d-head h2{font-size:21px;margin:0;line-height:1.25;word-break:break-word}
+.d-head p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.d-head div{flex:1}
+.d-body{padding:18px 22px 28px;display:grid;gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.panel h3{font-size:17px;margin:0 0 6px}
+.panel p{margin:0 0 8px;font-size:15px;color:var(--ink-2)}
+.panel p:last-child{margin-block-end:0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.field{display:grid;gap:6px;margin-block-end:14px}
+.field label,.field legend{font-weight:700;font-size:15px}
+.field textarea{font-family:var(--mono);font-size:14px;inline-size:100%;resize:vertical}
+.field small{color:var(--muted);font-size:14px}
+fieldset.field{border:0;padding:0;margin-inline:0}
+.sev{display:flex;gap:8px;flex-wrap:wrap}
+.sev label{font-weight:600;border:1px solid var(--line-strong);border-radius:8px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.sev label:has(input:checked){border-color:var(--v2);background:var(--v2-soft)}
+ul.checks{margin:6px 0 0;padding:0;list-style:none;font-size:15px;display:grid;gap:3px}
+ul.checks .y{color:var(--good)}ul.checks .n{color:var(--delete)}
+.tl{display:block;inline-size:100%;block-size:36px;background:var(--sunk);border-radius:6px}
+.tl line{stroke:var(--line-strong);stroke-width:1}
+.tl .v1{fill:var(--hand)}.tl .v2{fill:var(--v2)}.tl .cut{fill:var(--line-strong)}.tl .miss{fill:var(--delete)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);font-size:13px;color:var(--muted);margin-block-end:8px}
+.tl-label{font-size:14px;font-weight:700;margin:8px 0 4px}
+.result{font-size:16px;font-weight:700;margin:10px 0 0}
+.result.ok{color:var(--good)}.result.bad{color:var(--delete)}.result.wait{color:var(--muted)}
+input[type=range]{inline-size:100%;accent-color:var(--v2)}
+.ticks{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+#toast{position:fixed;inset-block-end:20px;inset-inline:0;margin-inline:auto;inline-size:fit-content;max-inline-size:calc(100vw - 32px);
+  background:var(--ink);color:var(--page);padding:11px 18px;border-radius:10px;font-size:15px;z-index:50;display:none}
+#toast.on{display:block}
+@media (max-width:640px){ol.phases{grid-template-columns:1fr 1fr}.start li{grid-template-columns:auto 1fr}.start .btn{grid-column:2;grid-row:auto;justify-self:start}}
+</style>
+</head>
+<body>
+<div class="mockbar">Functional mock with invented data. Buttons change this page only; nothing reaches Grafana. <button data-act="reset">Start over</button></div>
+<div class="top"><div class="wrap">
+  <span class="brand">Alerts BI<small>Review portal</small></span><span class="spacer"></span>
+  <button class="btn" popovertarget="standard">The V2 standard</button>
+</div></div>
+
+<main class="wrap">
+  <p class="crumbs"><a href="#">All teams</a> / Data Pipeline / ETL</p>
+  <div class="head"><h1>Data Pipeline / ETL</h1><span class="spacer"></span>
+    <button class="btn" popovertarget="weeks">Week of 17 – 24 Aug 2026 ▾</button>
+    <div id="weeks" popover class="menu"><a href="#" aria-current="true">17 – 24 Aug 2026</a><a href="#">10 – 17 Aug 2026</a><a href="#">3 – 10 Aug 2026</a><a href="#">All weeks</a></div>
+  </div>
+  <p class="lede" id="lede"></p>
+  <nav class="views" id="tabs" aria-label="Views"></nav>
+  <div id="view"></div>
+  <footer>Mock for discussion. Grouping by Grafana rule, model drafts, the wait-time replay, the side-by-side check and every write action are proposals, not current product behaviour.</footer>
+</main>
+
+<dialog id="drawer"></dialog>
+<div id="toast" role="status"></div>
+
+<div id="standard" popover>
+  <header><h2>The V2 standard</h2><button class="btn" popovertarget="standard" popovertargetaction="hide">Close</button></header>
+  <div class="in">
+    <p class="sub">A good alert tells the person who receives it what broke, how bad it is, and what to do. It is sent twice: once when it fires and once when it clears.</p>
+    <h4>Needed to finish phase 1</h4>
+    <div class="std"><h3>Say what failed, where, and by how much</h3><p>The message alone should be enough to know what is wrong.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Error Occurred</bdi><span class="yes">This</span><bdi class="raw">Warehouse load lag above 30m for 15m</bdi></div></div>
+    <div class="std"><h3>Report a problem, never a status</h3><p>If nobody has to do anything, it is a log line. Delete the alert.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">i am alive</bdi><span class="yes">This</span><span>No alert at all</span></div></div>
+    <div class="std"><h3>Use real names</h3><p>Application and component name a real thing someone can find.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Default</bdi><span class="yes">This</span><bdi class="raw">stream-router</bdi></div></div>
+    <div class="std"><h3>Fire once, clear once</h3><p>No alert stays on for days or flips on and off. Three or more fire-and-clear cycles in 24 hours is flapping. V2 has no expiry time: polled alerts are cleared by their collector, not by a timer.</p>
+      <div class="ex"><span class="no">Not this</span><span>41 incidents in a week</span><span class="yes">This</span><span>Fires, gets handled, clears</span></div></div>
+    <div class="std"><h3>Severity passes the wake-up test</h3><p>Critical means urgent, causing damage right now, and someone can act on it. Otherwise it is lower.</p>
+      <div class="ex"><span class="no">Not this</span><span>Critical for a nightly report delay</span><span class="yes">This</span><span>Warning, handled in working hours</span></div></div>
+    <div class="std"><h3>Don't send what your own dashboard hides</h3><p>If every panel you own filters an alert out, fix or delete it at the source.</p>
+      <div class="ex"><span class="no">Not this</span><span>A filter that hides the node</span><span class="yes">This</span><span>The alert is gone, the filter too</span></div></div>
+    <h4>Phase 2, after every alert is on V2</h4>
+    <div class="std"><h3>State the impact as what users see</h3><p>Describe the symptom people experience, not the technical cause.</p>
+      <div class="ex"><span class="no">Not this</span><bdi class="raw">Queue consumer lag high</bdi><span class="yes">This</span><bdi class="raw">Reports for orders are stale</bdi></div></div>
+    <div class="std"><h3>Give a runbook</h3><p>An https link to the steps the responder should take.</p>
+      <div class="ex"><span class="no">Not this</span><span>Empty, or “ask the team”</span><span class="yes">This</span><bdi class="raw">https://wiki…/runbooks/etl-jobs</bdi></div></div>
+  </div>
+</div>
+
+<script>
+// ---------- data (invented) ----------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => n.toLocaleString('en-US');
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const split=(total,n)=>{const out=[];let left=total;for(let i=0;i<n;i++){const v=i===n-1?left:Math.max(1,Math.round(left/(n-i)*(i%2?0.7:1.3)));out.push(Math.min(v,left-(n-1-i)));left-=out[i]}return out};
+const APPS=['orders-etl','billing-etl','events-stream','ingest-api','warehouse','exports','dq-core','catalog-sync','metrics-agg'];
+const WEEK=10080;
+const LANES={
+  delete:{verb:'Delete',title:n=>`Delete ${fmt(n)} alerts that don't need migrating`,why:'They report a status, are hidden by your own dashboard, or already have a working V2 version.',
+    rule:['An alert reports a problem, never a status.','“I am alive” and “completed successfully” belong in logs. Nobody can act on them.']},
+  quiet:{verb:'Quiet',title:n=>`Quiet ${fmt(n)} alerts that never clear or flip on and off`,why:'Fix the noise before migrating, so you don\'t carry it into V2.',
+    rule:['An alert fires once and clears once.','Three or more fire-and-clear cycles in 24 hours is flapping. An alert that never clears is stuck.']},
+  auto:{verb:'Migrate',title:n=>`Migrate ${fmt(n)} alerts automatically`,why:'Nothing is wrong with these. The migration service moves each field to its V2 place.',rule:null},
+  input:{verb:'Review',title:n=>`Review drafts for ${fmt(n)} alerts, then migrate`,why:'A new message and severity are drafted for each rule from its real query. You approve or edit.',
+    rule:['The message says what failed, where, and by how much.','Your own rule warehouse-lag already does this: “Warehouse load lag above 30m for 15m”.']},
+  hand:{verb:'After Grafana',title:n=>`Review ${fmt(n)} alerts from collectors and Oracle OEM`,why:'These come from vCenter, OCUM and Oracle OEM, not from Grafana rules. They get the same review: keep what you need, drop the rest. Start with your Grafana rules; this comes after.',rule:null},
+};
+const ORDER=['delete','quiet','auto','input','hand'];
+function build(){
+  const R=[];let id=0;
+  const add=(lane,name,alerts,o={})=>R.push({id:id++,lane,name,alerts,status:'todo',keep:o.keep||'',folder:o.folder||'ETL / misc',cause:o.cause||'',why:o.why||'',
+    msg:o.msg||'',draft:o.draft||'',sevOld:o.sevOld||'error',sev:o.sev||'high',sevWhy:o.sevWhy||'',pattern:o.pattern||'',verdict:o.verdict||'',wait:0});
+  // delete
+  add('delete','svc-heartbeat',96,{cause:'status',why:'Only says a service is alive',msg:'i am alive'});
+  add('delete','pipeline-finished',52,{cause:'hidden',why:'Hidden by every panel you own',msg:'completed successfully'});
+  add('delete','loader-started',34,{cause:'status',why:'Only says a job started',msg:'service started'});
+  add('delete','warehouse-lag',22,{cause:'twin',why:'Already on V2 and meets the standard',msg:'Warehouse load lag above 30m for 15m'});
+  add('delete','infra-heartbeat (API)',16,{folder:'sent by API',cause:'status',why:'Sent by API, only says a host is alive',msg:'heartbeat ok'});
+  split(16,8).forEach((n,i)=>add('delete',['cron-ok','sync-done','probe-up','batch-complete','agent-ping','export-finished','healthcheck','job-ok'][i],n,{cause:i%3===2?'hidden':'status',why:i%3===2?'Hidden by every panel you own':'Only reports a status',msg:'ok'}));
+  // quiet
+  add('quiet','etl-job-status',14,{pattern:'stuck',why:'Open for 7 of 7 days',msg:'job status: running'});
+  add('quiet','kafka-consumer-lag',17,{pattern:'flap',why:'Fired and cleared many times a day',msg:'Consumer lag above 50000 for 5m'});
+  add('quiet','disk-usage-nodes',9,{pattern:'flap',why:'Fired and cleared many times a day',msg:'Disk usage above 80%'});
+  add('quiet','queue-depth-etl',2,{pattern:'flap',why:'Fired and cleared many times a day',msg:'Queue depth above 1000'});
+  add('quiet','replica-behind',2,{pattern:'stuck',why:'Open for 7 of 7 days',msg:'Replica behind primary'});
+  // auto
+  [['ETL / ingestion',8,142],['ETL / warehouse',5,77],['ETL / streaming',4,51],['ETL / exports',2,17]].forEach(([f,k,t])=>
+    split(t,k).forEach((n,i)=>add('auto',`${f.split(' / ')[1]}-${['errors','latency','lag','backlog','rejects','timeouts','retries','saturation'][i]}`,n,{folder:f,msg:`${f.split(' / ')[1]} ${['error rate above 2% over 10m','p95 latency above 4s for 10m','lag above 15m for 10m','backlog above 5000 for 15m','rejects above 100 per minute','timeouts above 1% over 5m','retries above 500 per minute','CPU saturation above 90% for 15m'][i]}`})));
+  // input
+  const G='The message doesn\'t say what failed',P='A name is a placeholder';
+  add('input','job-failed-generic',61,{cause:G,msg:'Error Occurred',draft:'{{job}} failed 3 runs in a row on {{node}}',sevOld:'critical',sev:'high',sevWhy:'A failed job delays reports but causes no damage at night. It can wait for working hours.'});
+  add('input','loader-error',18,{cause:G,msg:'Something went wrong',draft:'Loader {{source}} rejected more than 5% of rows over 15m',sevOld:'error',sev:'high',sevWhy:'Data is being dropped, and someone can act on it.'});
+  add('input','export-check',9,{cause:G,msg:'Unable to get data',draft:'Export {{target}} has delivered no file for 2h',sevOld:'error',sev:'warning',sevWhy:'Exports are retried hourly. Nobody needs to act right away.'});
+  split(6,2).forEach((n,i)=>add('input',['dq-alert','sync-problem'][i],n,{cause:G,msg:'Alert triggered',draft:['Data quality check {{check}} failed on {{table}}','Catalog sync is more than 30m behind'][i],sevOld:'error',sev:'warning',sevWhy:'No immediate damage.'}));
+  add('input','stream-backpressure',23,{cause:P,msg:'Backpressure above 80% for 10m',draft:'Backpressure above 80% for 10m',why:'Component is “Default”',sevOld:'error',sev:'high',sevWhy:'Unchanged in meaning. “error” maps to “high” in V2.'});
+  add('input','partition-skew',16,{cause:P,msg:'Partition skew above 3x for 30m',draft:'Partition skew above 3x for 30m',why:'Node is “N/A”',sevOld:'critical',sev:'warning',sevWhy:'Skew slows jobs down but breaks nothing. It fails the wake-up test.'});
+  split(33,7).forEach((n,i)=>add('input',['topic-growth','offset-reset','schema-drift','late-events','compaction-lag','shard-hot','ttl-expired'][i],n,{cause:P,msg:'Threshold crossed for 10m',draft:'Threshold crossed for 10m',why:i%2?'Node is “N/A”':'Component is “Default”',sevOld:'error',sev:'high',sevWhy:'“error” maps to “high” in V2.'}));
+  // hand
+  const V='vCenter collector',O='OCUM collector',E='Oracle OEM';
+  add('hand','Datastore usage on disk',9,{folder:V,keep:'keep',why:'A full datastore stops virtual machines. Someone has to act.',msg:'Datastore usage on disk: esx-ds-14 above 90%'});
+  add('hand','Host connection and power state',5,{folder:V,keep:'keep',why:'A host that drops out takes its machines with it.',msg:'Host esx-22 is not responding'});
+  add('hand','Virtual machine CPU usage',5,{folder:V,keep:'drop',why:'A vendor default that fires on every busy machine. Nobody acted on it this week.',msg:'VM etl-worker-07 CPU usage above 75%'});
+  add('hand','Volume space nearly full',5,{folder:O,keep:'keep',why:'A capacity risk with a clear action.',msg:'Volume vol_etl_03 space nearly full'});
+  add('hand','Error EMS received',3,{folder:O,keep:'drop',why:'Informational. Unified Manager retires these by itself after 15 minutes.',msg:'Error EMS received'});
+  add('hand','Tablespace usage',3,{folder:E,keep:'keep',why:'OEM fires and clears this by itself, as the standard asks.',msg:'Tablespace USERS is 92% full'});
+  add('hand','Agent unreachable',1,{folder:E,keep:'drop',why:'Reports the monitoring agent, not the database. Covered by OEM\'s own health view.',msg:'Agent unreachable'});
+  R.forEach(r=>{const g=rng(r.id*7919+13);r.apps=1+Math.floor(g()*Math.min(7,r.alerts));r.inc=incidents(r,g)});
+  // some rules are already running side by side
+  const autos=R.filter(r=>r.lane==='auto');
+  [['safe',1],['safe',4],['missed',7],['extra',10],['none',13],['safe',16]].forEach(([v,i])=>{autos[i].status='shadow';autos[i].verdict=v});
+  return R;
+}
+function incidents(r,g){
+  if(r.pattern==='stuck')return[{s:0,d:WEEK}];
+  const out=[];
+  if(r.pattern==='flap'){const n=28+Math.floor(g()*20);for(let i=0;i<n;i++)out.push({s:Math.floor(g()*(WEEK-10)),d:1+Math.floor(g()*6)});
+    for(let i=0;i<3;i++)out.push({s:Math.floor(g()*(WEEK-240)),d:45+Math.floor(g()*160)})}
+  else{const n=r.lane==='delete'?0:Math.floor(g()*4)+(r.lane==='auto'?1:0);for(let i=0;i<n;i++)out.push({s:Math.floor(g()*(WEEK-300)),d:20+Math.floor(g()*220)})}
+  return out.sort((a,b)=>a.s-b.s);
+}
+function v2incidents(r){ // what the V2 rule did during the side-by-side week
+  const base=r.inc.map(x=>({...x}));
+  if(r.verdict==='none'||r.verdict==='fresh')return[];
+  if(r.verdict==='missed')return base.slice(1);
+  if(r.verdict==='extra')return[...base,{s:7300,d:35}].sort((a,b)=>a.s-b.s);
+  return base;
+}
+const V2_BASE={total:48,good:29,input:11,del:8};
+let RULES,S;
+function reset(){RULES=build();S={tab:'plan',open:{delete:true,input:true},all:{},q:'',fl:'',fs:'',page:0,folders:{}};render()}
+
+// ---------- derived ----------
+const todo=l=>RULES.filter(r=>r.lane===l&&r.status==='todo');
+const sum=rs=>rs.reduce((a,r)=>a+r.alerts,0);
+const shadow=()=>RULES.filter(r=>r.status==='shadow');
+const gone=()=>RULES.filter(r=>r.status==='done');
+const cut=()=>RULES.filter(r=>r.status==='cutover');
+const left=()=>RULES.filter(r=>r.status!=='done');
+function verdictOf(r){
+  if(r.verdict)return r.verdict;
+  return r.inc.length?'safe':'none';
+}
+const VERDICT={safe:['ok','Same incidents in both. Safe to pause the old rule.'],missed:['bad','The old rule caught an incident the new one missed.'],
+  extra:['bad','The new rule fired where the old one didn\'t.'],fresh:['wait','Migrated today. Both rules now run together; the comparison is ready in a week.'],none:['wait','Neither rule fired this week, so there is nothing to compare yet.']};
+
+// ---------- render ----------
+function render(){
+  const L=left(),sh=shadow(),done=gone();
+  const d=sum(todo('delete')),a=sum(todo('auto')),inp=sum(todo('input')),inpRules=todo('input').length;
+  document.getElementById('lede').innerHTML=sum(L)===0?'<b>Every alert is on V2.</b> Phase 1 is done. Next is phase 2: impact and runbook.':
+    `<b>${fmt(sum(L))} Appchi alerts are left.</b> ${d?fmt(d)+' can be deleted, ':''}${a?fmt(a)+' can migrate automatically, ':''}${inp?`and ${fmt(inp)} have a draft waiting for your review, from only ${inpRules} Grafana rules.`:'and no drafts are waiting.'}`;
+  const tabs=[['plan','Action plan'],['side','Side by side',sh.length],['all','All alerts'],['progress','Progress']];
+  document.getElementById('tabs').innerHTML=tabs.map(([k,t,n])=>`<button data-act="tab" data-v="${k}" ${S.tab===k?'aria-current="page"':''}>${t}${n?`<span class="n">${n}</span>`:''}</button>`).join('');
+  document.getElementById('view').innerHTML={plan:viewPlan,side:viewSide,all:viewAll,progress:viewProgress}[S.tab]();
+}
+function board(){
+  const segs=[...ORDER.map(l=>[l==='input'?'input':l,sum(todo(l)),l]),['shadow',sum(shadow()),'side'],['cutover',sum(cut()),'hand'],['done',sum(gone()),'']];
+  const total=segs.reduce((x,s)=>x+s[1],0);let x=0;
+  const rects=segs.map(([c,n,l])=>{const w=n/total*1000;const r=n?`<rect class="${c}" x="${x}" width="${Math.max(w-1.5,1)}" height="20" data-act="jump" data-v="${l}"><title>${fmt(n)}</title></rect>`:'';x+=w;return r}).join('');
+  const names={delete:'delete',quiet:'quiet first',auto:'migrate automatically',input:'review a draft',hand:'from collectors and OEM',shadow:'running side by side',cutover:'kept, waiting for the collector',done:'moved or deleted'};
+  const dot={input:'rewrite',cutover:'hand'};
+  const migrated=sum(gone().filter(r=>r.lane!=='delete'))+sum(shadow());
+  const v2t=V2_BASE.total+migrated,v2g=V2_BASE.good+migrated;let y=0;
+  const v2=[['good',v2g],['input',V2_BASE.input],['delete',V2_BASE.del]].map(([c,n])=>{const w=n/v2t*1000;const r=`<rect class="${c}" x="${y}" width="${Math.max(w-1.5,1)}" height="20"/>`;y+=w;return r}).join('');
+  return `<section class="board" aria-label="Where every alert stands">
+   <div class="lane wide"><div class="lane-head"><h2>Appchi, the old format</h2><p><b>${fmt(sum(left()))}</b> alerts still here, from ${left().filter(r=>r.lane!=='hand').length} Grafana rules and ${sum(left().filter(r=>r.lane==='hand'))} from collectors and OEM</p></div>
+    <svg class="bar" viewBox="0 0 1000 20" preserveAspectRatio="none" role="img" aria-label="Appchi alerts by what they need">${rects}</svg>
+    <div class="counts">${segs.filter(s=>s[1]).map(([c,n,l])=>`<button data-act="jump" data-v="${l}"><i class="dot ${dot[c]||c}"></i><b>${fmt(n)}</b> ${names[c]}</button>`).join('')}</div></div>
+   <div class="lane wide"><div class="lane-head"><h2>Appchi V2, the standard</h2><p><b>${fmt(v2g)} of ${fmt(v2t)}</b> meet the phase 1 standard</p></div>
+    <svg class="bar" viewBox="0 0 1000 20" preserveAspectRatio="none" role="img" aria-label="V2 alerts">${v2}</svg>
+    <div class="counts"><button><i class="dot good"></i><b>${fmt(v2g)}</b> meet the standard</button><button><i class="dot rewrite"></i><b>${V2_BASE.input}</b> need a better message</button><button><i class="dot delete"></i><b>${V2_BASE.del}</b> delete</button></div></div>
+  </section>`;
+}
+function startHere(){
+  const pick=[];const top=l=>todo(l).sort((a,b)=>b.alerts-a.alerts);
+  const safe=shadow().filter(r=>verdictOf(r)==='safe');
+  if(safe.length)pick.push({what:`Pause ${safe.length} old rules that passed the side-by-side check`,effect:`${fmt(sum(safe))} alerts leave Appchi. Pausing can be undone.`,btn:'Review and pause',act:'tab',v:'side',primary:1});
+  const d=top('delete')[0];if(d)pick.push({r:d,what:`Delete the rule <bdi class="raw">${esc(d.name)}</bdi>`,effect:`Removes ${d.alerts} alerts. ${esc(d.why)}.`,btn:'Review'});
+  const q=top('quiet')[0];if(q)pick.push({r:q,what:`Fix the noise in <bdi class="raw">${esc(q.name)}</bdi>`,effect:q.pattern==='stuck'?`${q.alerts} alerts were open for the whole week.`:`${q.alerts} alerts fired and cleared ${q.inc.length} times this week.`,btn:'See the fix'});
+  const f=folders()[0];if(f)pick.push({what:`Migrate the folder <bdi class="raw">${esc(f.name)}</bdi>`,effect:`${fmt(f.alerts)} alerts in ${f.rules.length} rules. Nothing to fix first.`,btn:`Migrate ${fmt(f.alerts)} alerts`,act:'folder',v:f.name,primary:1});
+  const i=top('input')[0];if(i)pick.push({r:i,what:`Review the draft for <bdi class="raw">${esc(i.name)}</bdi>`,effect:`${i.alerts} alerts say “${esc(i.msg)}”. One approval fixes all of them.`,btn:'Review draft'});
+  if(!pick.length)return'';
+  return `<h2 class="sec">Start here this week</h2><p class="sub">The fixes that clear the most for the least work. Each one is a single Grafana rule or folder.</p>
+  <ol class="start">${pick.slice(0,5).map((p,n)=>`<li><span class="pos">${n+1}</span><span class="what">${p.what}</span>
+    <button class="btn small ${p.primary?'primary':''}" data-act="${p.act||'rule'}" data-v="${p.r?p.r.id:esc(p.v)}">${p.btn}</button><span class="effect">${p.effect}</span></li>`).join('')}</ol>`;
+}
+const folders=()=>{const m={};todo('auto').forEach(r=>{(m[r.folder]??={name:r.folder,rules:[],alerts:0}).rules.push(r);m[r.folder].alerts+=r.alerts});return Object.values(m).sort((a,b)=>b.alerts-a.alerts)};
+function ruleRow(r,btn){return `<tr><td><button class="linkbtn name" data-act="rule" data-v="${r.id}">${esc(r.name)}</button><span class="why">${esc(r.why||r.msg)} · ${r.apps} application${r.apps>1?'s':''}</span></td>
+  <td class="num">${r.alerts}</td><td class="num">${r.pattern==='stuck'?'open all week':r.inc.length}</td><td class="num"><button class="btn small" data-act="rule" data-v="${r.id}">${btn}</button></td></tr>`}
+function rulesTable(rs,lane,btn,head='Grafana rule'){
+  const all=S.all[lane+head];const show=all?rs:rs.slice(0,4);
+  return `<div class="scroll"><table class="groups"><tr><th>${head}</th><th class="num">Alerts</th><th class="num">Incidents</th><th></th></tr>${show.map(r=>ruleRow(r,btn)).join('')}</table></div>
+   ${rs.length>4?`<p class="more"><button class="linkbtn" data-act="more" data-v="${esc(lane+head)}">${all?'Show fewer':`Show the other ${rs.length-4} rules (${sum(rs.slice(4))} alerts)`}</button></p>`:''}`;
+}
+function moveBody(l){
+  const rs=todo(l).sort((a,b)=>b.alerts-a.alerts);const L=LANES[l];
+  const rule=L.rule?`<div class="rule"><b>The rule: ${L.rule[0]}</b>${L.rule[1]} <button class="linkbtn" popovertarget="standard">See it in the standard</button></div>`:'';
+  if(l==='auto')return `<div class="scroll"><table class="groups"><tr><th>Grafana folder</th><th class="num">Rules</th><th class="num">Alerts</th><th></th></tr>
+    ${folders().map(f=>`<tr><td><button class="linkbtn name" data-act="fold" data-v="${esc(f.name)}">${esc(f.name)}</button><span class="why">${S.folders[f.name]?'Hide rules':'Show rules'}</span></td><td class="num">${f.rules.length}</td><td class="num">${f.alerts}</td>
+      <td class="num"><button class="btn small primary" data-act="folder" data-v="${esc(f.name)}">Migrate folder</button></td></tr>
+      ${S.folders[f.name]?f.rules.map(r=>`<tr class="sub"><td><button class="linkbtn name" data-act="rule" data-v="${r.id}">${esc(r.name)}</button><span class="why">${esc(r.msg)}</span></td><td></td><td class="num">${r.alerts}</td><td class="num"><button class="btn small" data-act="rule" data-v="${r.id}">Open</button></td></tr>`).join(''):''}`).join('')}</table></div>
+    <p class="note">Migrating creates the V2 rule and keeps the old one running. The two are compared for a week under Side by side before anything is paused.</p>`;
+  if(l==='input'){const causes=[...new Set(rs.map(r=>r.cause))];
+    return rule+causes.map(c=>{const g=rs.filter(r=>r.cause===c);return `<p class="cause"><strong>${esc(c)}</strong> · ${sum(g)} alerts from ${g.length} rules</p>${rulesTable(g,l,'Review draft',c)}`}).join('')}
+  if(l==='hand'){const how={'vCenter collector':'recognised by its operator','OCUM collector':'recognised by its operator','Oracle OEM':'recognised by application “oracle”'};
+    return [...new Set(rs.map(r=>r.folder))].map(s=>{const g=rs.filter(r=>r.folder===s);return `<p class="cause"><strong>${esc(s)}</strong> · ${sum(g)} alerts from ${g.length} alarm definitions · ${how[s]}</p>${rulesTable(g,l,'Review',s)}`}).join('')+(cut().length?`<p class="note">${sum(cut())} alerts kept. They move to V2 when the collector is switched over.</p>`:'')}
+  return rule+rulesTable(rs,l,l==='delete'?'Review':'See the fix');
+}
+function viewPlan(){
+  const moves=ORDER.map((l,i)=>{const rs=todo(l);const n=sum(rs);const L=LANES[l];
+    if(!rs.length)return `<li class="move ${l==='input'?'rewrite':l}"><p class="empty-note"><b>${i+1}. ${L.verb}:</b> nothing left here.</p></li>`;
+    const gain={delete:`${rs.length} rules to delete. Appchi drops from ${fmt(sum(left()))} alerts to ${fmt(sum(left())-n)}.`,
+      quiet:`${rs.length} rules to fix. Target: each incident sends one “fired” and one “cleared”.`,
+      auto:`${rs.length} rules in ${folders().length} Grafana folders. No answers needed from you.`,
+      input:`${rs.length} drafts to approve. Each approval covers every alert from that rule.`,
+      hand:`${rs.length} alarm definitions from ${new Set(rs.map(r=>r.folder)).size} senders. One decision covers every host or volume.`}[l];
+    return `<li class="move ${l==='input'?'rewrite':l}" id="m-${l}"><details ${S.open[l]?'open':''} data-lane="${l}"><summary>
+      <span class="step">${i+1}</span><h3>${L.title(n)}</h3><span class="kind">${L.verb}</span>
+      <p class="why">${L.why}</p><p class="gain">${gain}</p>
+      <span class="open-hint"><span class="closed">Show the ${rs.length} ${l==='hand'?'alarm definitions':'rules'}</span><span class="opened">Hide</span></span></summary>
+      <div class="body">${moveBody(l)}</div></details></li>`}).join('');
+  return board()+startHere()+`<h2 class="sec">The whole plan</h2><p class="sub">Five moves, in this order, because each one makes the next smaller. Every row is one Grafana rule, so one fix clears all its alerts.</p><ol class="moves">${moves}</ol>`;
+}
+function timeline(rows){ // rows: [label, incidents, cls, markFn]
+  const days='<div class="days">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<span>${d}</span>`).join('')+'</div>';
+  return rows.map(([label,inc,cls,mark])=>`<p class="tl-label">${label}</p><svg class="tl" viewBox="0 0 1008 36" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">
+    ${[1,2,3,4,5,6].map(d=>`<line x1="${d*144}" x2="${d*144}" y1="0" y2="36"/>`).join('')}
+    ${inc.map(x=>`<rect class="${mark?mark(x)||cls:cls}" x="${x.s/10}" y="6" width="${Math.max(x.d/10,2.5)}" height="24" rx="1"/>`).join('')}</svg>`).join('')+days;
+}
+function viewSide(){
+  const sh=shadow();if(!sh.length)return `<h2 class="sec">Side by side</h2><p class="sub">No rules are being compared right now. Migrate a rule or a folder and it shows up here for a week.</p>`;
+  const groups=['safe','missed','extra','none','fresh'].map(v=>[v,sh.filter(r=>verdictOf(r)===v)]).filter(g=>g[1].length);
+  const head={safe:'Safe to pause the old rule',missed:'The new rule missed an incident',extra:'The new rule fired where the old one didn\'t',none:'No incidents yet, nothing to compare',fresh:'Just migrated, result in a week'};
+  const safe=sh.filter(r=>verdictOf(r)==='safe');
+  return `<h2 class="sec">Side by side</h2><p class="sub">Each migrated rule runs next to its old version for a week. Incidents are compared one by one, from Grafana's own history. A paused rule can be switched back on.</p>
+   ${safe.length?`<p class="actions"><button class="btn primary" data-act="pauseall">Pause all ${safe.length} old rules that passed (${fmt(sum(safe))} alerts)</button></p>`:''}
+   <ol class="moves">${groups.map(([v,rs])=>`<li class="move ${v==='safe'?'auto':(v==='none'||v==='fresh')?'hand':'delete'}"><details open><summary><span class="step">${rs.length}</span><h3>${head[v]}</h3><span class="kind">${v==='safe'?'Passed':(v==='none'||v==='fresh')?'Waiting':'Needs a look'}</span>
+     <p class="why">${VERDICT[v][1]}</p></summary><div class="body"><div class="scroll"><table class="groups"><tr><th>Grafana rule</th><th class="num">Alerts</th><th class="num">Old / new incidents</th><th></th></tr>
+     ${rs.map(r=>`<tr><td><button class="linkbtn name" data-act="rule" data-v="${r.id}">${esc(r.name)}</button><span class="why">${esc(r.folder)}</span></td><td class="num">${r.alerts}</td><td class="num">${v==='fresh'?'not yet':r.inc.length+' / '+v2incidents(r).length}</td>
+       <td class="num"><button class="btn small" data-act="rule" data-v="${r.id}">Compare</button></td></tr>`).join('')}</table></div></div></details></li>`).join('')}</ol>`;
+}
+let ALERTS=null;
+function alerts(){ if(ALERTS)return ALERTS; ALERTS=[];
+  RULES.forEach(r=>{const g=rng(r.id+99);for(let i=0;i<r.alerts;i++)ALERTS.push({r,app:r.lane==='hand'?r.folder:APPS[Math.floor(g()*APPS.length)],node:`node-${1+Math.floor(g()*40)}`,inc:r.pattern==='stuck'?1:Math.max(r.inc.length?1:0,Math.round(r.inc.length*(0.4+g())/Math.max(1,r.alerts/6)))})});
+  ALERTS.sort((a,b)=>b.inc-a.inc);return ALERTS}
+const laneOf=r=>r.status==='todo'?r.lane:r.status;
+const LABEL={delete:'Delete',quiet:'Quiet first',auto:'Migrate automatically',input:'Review draft',hand:'Review: keep or drop',shadow:'Running side by side',cutover:'Kept, waiting for the collector',done:'Moved or deleted'};
+function viewAll(){
+  const q=S.q.toLowerCase();
+  const rows=alerts().filter(a=>(!S.fl||laneOf(a.r)===S.fl)&&(!S.fs||a.app===S.fs)&&(!q||(a.r.name+' '+a.app+' '+a.r.msg).toLowerCase().includes(q)));
+  const per=25,pages=Math.max(1,Math.ceil(rows.length/per));S.page=Math.min(S.page,pages-1);const page=rows.slice(S.page*per,S.page*per+per);
+  const apps=[...new Set(alerts().map(a=>a.app))].sort();
+  return `<h2 class="sec">All Appchi alerts this week</h2><p class="sub">Every alert, most incidents first. Search and filters would stay in the link, so you can share exactly what you see.</p>
+  <div class="filters"><input type="search" id="q" placeholder="Search message, application or rule" aria-label="Search alerts" value="${esc(S.q)}">
+   <select id="fl" aria-label="What to do"><option value="">What to do: any</option>${Object.entries(LABEL).map(([k,v])=>`<option value="${k}" ${S.fl===k?'selected':''}>${v}</option>`).join('')}</select>
+   <select id="fs" aria-label="Application"><option value="">Application: all ${apps.length}</option>${apps.map(a=>`<option ${S.fs===a?'selected':''}>${esc(a)}</option>`).join('')}</select></div>
+  <div class="scroll"><table class="all"><tr><th>Application</th><th>Message</th><th>Grafana rule</th><th>Incidents</th><th>What to do</th></tr>
+  ${page.map(a=>`<tr><td>${esc(a.app)}<br><span class="raw">${a.r.lane==='hand'?'':esc(a.node)}</span></td><td><bdi class="raw" dir="auto">${esc(a.r.msg)}</bdi></td>
+    <td>${a.r.lane==='hand'?esc(a.r.name):`<button class="linkbtn name" data-act="rule" data-v="${a.r.id}">${esc(a.r.name)}</button>`}</td><td class="num">${a.r.pattern==='stuck'?'open all week':a.inc}</td>
+    <td><button class="linkbtn tag ${laneOf(a.r)==='input'?'rewrite':laneOf(a.r)}" data-act="rule" data-v="${a.r.id}">${LABEL[laneOf(a.r)]}</button></td></tr>`).join('')||'<tr><td colspan="5">No alerts match. Clear the search or filters.</td></tr>'}</table></div>
+  <div class="pager"><span>${rows.length?`${S.page*per+1} – ${S.page*per+page.length} of ${fmt(rows.length)} Appchi alerts`:''}</span><span class="actions">
+   <button class="btn small" data-act="page" data-v="-1" ${S.page===0?'disabled':''}>Previous</button><button class="btn small" data-act="page" data-v="1" ${S.page>=pages-1?'disabled':''}>Next</button></span></div>`;
+}
+function viewProgress(){
+  const L=left();const now=sum(L),nowRules=L.filter(r=>r.lane!=='hand').length;
+  const weeks=[['27 Jul – 3 Aug',871,58,'12 of 19'],['3 – 10 Aug',842,56,'18 of 27'],['10 – 17 Aug',790,53,'22 of 39']];
+  return `<h2 class="sec">Progress</h2><p class="sub">Phase 1 is finished when no Appchi alerts are left. The two formats are counted apart, and rules are shown because they move faster than alerts.</p>
+  <ol class="phases"><li class="past"><b>Phase 0 · Clean up</b>Remove noise and map what's left</li><li class="now"><b>Phase 1 · New rules</b>${fmt(now)} Appchi alerts to go</li><li><b>Phase 2 · Enrich</b>Impact and runbook on every alert</li><li><b>Done</b></li></ol>
+  <div class="weeks">${weeks.map(w=>`<div class="week"><b>${w[0]}</b><dl><dt>Appchi alerts left</dt><dd>${w[1]}</dd><dt>Appchi rules left</dt><dd>${w[2]}</dd><dt>V2 meeting standard</dt><dd>${w[3]}</dd></dl></div>`).join('')}
+   <div class="week this"><b>17 – 24 Aug · this week</b><dl><dt>Appchi alerts left</dt><dd>${fmt(now)}</dd><dt>Appchi rules left</dt><dd>${nowRules}</dd><dt>Running side by side</dt><dd>${shadow().length} rules</dd></dl></div></div>
+  <p class="note">The portal measures a week at a time. What you delete or pause today is confirmed by next week's run.</p>`;
+}
+
+// ---------- drawer ----------
+let CUR=null;
+const WAITS=[0,2,5,10,15,30];
+function drawer(r){CUR=r;const dlg=document.getElementById('drawer');
+  dlg.innerHTML=`<div class="d-head"><div><h2><bdi class="raw">${esc(r.name)}</bdi></h2><p>${r.lane==='hand'?'Alarm definition from the '+esc(r.folder):'Grafana rule in '+esc(r.folder)} · ${r.alerts} alerts · ${r.apps} application${r.apps>1?'s':''}</p></div>
+    <button class="btn" data-act="close">Close</button></div><div class="d-body" id="d-body">${drawerBody(r)}</div>`;
+  if(!dlg.open)dlg.showModal();
+}
+function fieldsTable(r,withDraft){return `<article class="alert"><table class="fix"><tr><th>Field</th><th>Old format</th><th>V2</th></tr>
+  <tr><td>Message</td><td><bdi class="raw ${withDraft&&r.msg!==r.draft?'now':''}" dir="auto">${esc(r.msg)}</bdi></td><td>${withDraft?'<span class="better">Your approved draft</span>':'<span class="handled">Carried over</span>'}</td></tr>
+  <tr><td>Component</td><td>${r.why.includes('Component')?'<bdi class="raw now">Default</bdi>':'<span class="raw">object</span> label'}</td><td class="handled">${r.why.includes('Component')?'Taken from the rule\'s query':'Moved to <span class="raw">component</span>'}</td></tr>
+  <tr><td>Severity</td><td><span class="raw">${esc(r.sevOld)}</span></td><td>${withDraft?'<span class="better">Your choice below</span>':'<span class="handled">Mapped to <span class="raw">high</span></span>'}</td></tr>
+  <tr><td>Rule link</td><td>present</td><td class="handled">Carried over</td></tr>
+  <tr><td>Impact, runbook</td><td class="now empty">not in the old format</td><td>Left empty. They are phase 2.</td></tr></table></article>`}
+function drawerBody(r){
+  if(r.status==='done')return `<div class="panel"><h3>Done</h3><p>${r.lane==='delete'?'You marked this rule as deleted.':'The old rule is paused and the V2 rule has taken over.'} Next week's run confirms it.</p><p class="actions"><button class="btn" data-act="undo">Undo</button></p></div>`;
+  if(r.status==='shadow'&&verdictOf(r)==='fresh')return `<div class="panel"><h3>Migrated today</h3><p>The V2 rule was created and the old rule keeps running. In a week this page compares their incidents one by one and tells you whether the old rule is safe to pause.</p><p class="actions"><button class="btn" data-act="undo">Undo the migration</button></p></div>`;
+  if(r.status==='shadow'){const v=verdictOf(r);const v2=v2incidents(r);
+    const miss=x=>v==='missed'&&x===r.inc[0]?'miss':'';const extra=x=>v==='extra'&&x.s===7300?'miss':'';
+    return `<div class="panel"><h3>Side by side, 17 – 24 Aug</h3><p>Both rules ran all week. Each bar is one incident, from when it fired to when it cleared.</p>
+      ${timeline([[`Old rule · ${r.inc.length} incidents`,r.inc,'v1',miss],[`New V2 rule · ${v2.length} incidents`,v2,'v2',extra]])}
+      <p class="result ${VERDICT[v][0]}">${VERDICT[v][1]}</p>
+      ${v==='missed'?'<p>The red incident on Monday has no match. Check the new rule\'s condition before pausing the old one.</p>':''}
+      ${v==='extra'?'<p>The red incident is new. It may be a real problem the old rule never caught, or new noise.</p>':''}
+      ${v==='none'?'<p>Keep both running another week, or rely on the replay against past weeks.</p>':''}</div>
+     <div class="panel"><p class="actions"><button class="btn ${v==='safe'?'primary':''}" data-act="pause">Pause the old rule${v==='safe'?'':' anyway'}</button>
+       ${v==='none'?'<button class="btn" data-act="toast" data-v="Kept running for another week.">Wait another week</button>':''}<button class="btn" data-act="toast" data-v="Would open both rules in Grafana.">Open both in Grafana</button></p>
+       <p>Pausing is reversible. The old rule is deleted two weeks later if nobody switches it back on.</p></div>`}
+  if(r.lane==='delete'){const txt={status:['An alert reports a problem, never a status.',`Every alert from this rule says “${esc(r.msg)}”. Nobody can act on that.`],
+      hidden:['Don\'t send what your own dashboard hides.','Every panel you own filters these out, so nobody on the team sees them.'],
+      twin:['Already migrated.','The same alerts fire in V2 with the same message, and the V2 version meets the standard. This copy is duplicate noise.']}[r.cause];
+    return `<div class="panel"><h3>Why delete it</h3><div class="rule"><b>${txt[0]}</b>${txt[1]}</div></div>
+     <div class="panel"><h3>What it sends</h3><ul class="plain">${[0,1,2].map(i=>`<li><strong>${APPS[(r.id+i)%APPS.length]}</strong><bdi class="raw now" dir="auto">${esc(r.msg)}</bdi><span class="n">node-${r.id+i+1}</span></li>`).join('')}</ul>
+       <p class="note">3 of ${r.alerts} alerts shown.</p></div>
+     <div class="panel"><p class="actions"><button class="btn primary" data-act="delete">Delete the rule in Grafana</button><button class="btn" data-act="keep">Keep it, this is needed</button></p>
+       <p>Deleting pauses the rule first. It is removed two weeks later if nobody switches it back on.</p></div>`}
+  if(r.lane==='quiet'){
+    if(r.pattern==='stuck')return `<div class="panel"><h3>Open for the whole week</h3>${timeline([['This week · 1 incident that never cleared',r.inc,'v1']])}
+      <p>The condition was true every time Grafana checked it. Either the problem is real and nobody fixed it, or the threshold describes normal behaviour.</p></div>
+      <div class="panel"><h3>Pick one</h3><p class="actions"><button class="btn primary" data-act="toast" data-v="Would open the rule's threshold in Grafana.">The threshold is wrong: change it</button>
+        <button class="btn" data-act="toast" data-v="Kept. It stays in this list until it clears.">The problem is real: we'll fix it</button><button class="btn danger" data-act="delete">Nobody needs it: delete</button></p></div>`;
+    const w=WAITS[r.wait],kept=r.inc.filter(x=>x.d>w),long=r.inc.filter(x=>x.d>=45),caught=long.filter(x=>x.d>w);
+    return `<div class="panel"><h3>Fired and cleared ${r.inc.length} times this week</h3><p>Most incidents lasted a few minutes and cleared by themselves. A wait time tells Grafana to fire only if the condition holds that long.</p>
+      ${timeline([[`This week · ${r.inc.length} incidents`,r.inc,'v1'],[`With a ${w}-minute wait · ${kept.length} incidents`,r.inc,'v2',x=>x.d>w?'':'cut']])}
+      <div class="field"><label for="wait">Wait before firing: ${w} minutes</label><input type="range" id="wait" min="0" max="${WAITS.length-1}" step="1" value="${r.wait}"><div class="ticks">${WAITS.map(x=>`<span>${x}m</span>`).join('')}</div></div>
+      <p class="result ${caught.length===long.length&&w?'ok':w?'bad':'wait'}">${w?`Would have fired ${kept.length} times, not ${r.inc.length}. ${caught.length} of ${long.length} long incidents still caught.`:'Move the slider to replay the week with a wait time.'}</p></div>
+     <div class="panel"><p class="actions"><button class="btn primary" data-act="applywait" ${w?'':'disabled'}>Set a ${w}-minute wait in Grafana</button><button class="btn danger" data-act="delete">Delete the rule</button></p>
+       <p>Replayed on this rule's own metric for the week. Once it is quiet, the rule moves on to migration.</p></div>`}
+  if(r.lane==='auto')return `<div class="panel"><h3>Nothing to fix</h3><p>The message, names and firing pattern already meet the phase 1 standard. The migration service does the rest.</p></div>
+     ${fieldsTable(r,false)}<div class="panel"><p class="actions"><button class="btn primary" data-act="migrate">Migrate ${r.alerts} alerts</button><button class="btn" data-act="toast" data-v="Would open the rule in Grafana.">Open in Grafana</button></p>
+       <p>This creates the V2 rule and keeps the old one running. They are compared side by side for a week.</p></div>`;
+  if(r.lane==='input'){const sib=todo('input').filter(x=>x.cause===r.cause&&x.id!==r.id);
+    const checks=r.sev==='critical'?['y','y','y']:r.sev==='high'?['n','y','y']:['n','n','y'];
+    return `<div class="panel"><h3>${esc(r.cause)}</h3><div class="rule">${r.cause.startsWith('A name')?`<b>The rule: use real names.</b>${esc(r.why)}. The real name can be read from the rule's query.`:`<b>The rule: the message says what failed, where, and by how much.</b>Every alert from this rule says “${esc(r.msg)}”.`} <button class="linkbtn" popovertarget="standard">See it in the standard</button></div></div>
+     <div class="panel"><h3>Draft for V2</h3><p>Written from this rule's query and threshold. Edit anything that is off.</p>
+       <div class="field"><label for="draft">Message</label><textarea id="draft" rows="2" dir="auto">${esc(r.draft)}</textarea><small>Was: <bdi class="raw now">${esc(r.msg)}</bdi></small></div>
+       <fieldset class="field"><legend>Severity</legend><div class="sev">${['critical','high','warning'].map(s=>`<label><input type="radio" name="sev" value="${s}" ${r.sev===s?'checked':''}>${s}${s===r.sevProposed?' · proposed':''}</label>`).join('')}</div>
+         <small>Was <span class="raw">${esc(r.sevOld)}</span>. ${esc(r.sevWhy)}</small>
+         <ul class="checks"><li class="${checks[0]}">${checks[0]==='y'?'✓':'✗'} Urgent: can't wait for working hours</li><li class="${checks[1]}">${checks[1]==='y'?'✓':'✗'} Causing damage right now</li><li class="${checks[2]}">${checks[2]==='y'?'✓':'✗'} Someone can act on it</li></ul></fieldset>
+       ${sib.length&&!r.cause.startsWith('A name')?`<label><input type="checkbox" id="sibs"> Draft the ${sib.length} other rules with this problem the same way, for me to review next</label>`:''}</div>
+     ${fieldsTable(r,true)}
+     <div class="panel"><p class="actions"><button class="btn primary" data-act="approve">Approve and migrate ${r.alerts} alerts</button><button class="btn" data-act="toast" data-v="Would open the rule in Grafana.">Open in Grafana</button></p>
+       <p>This creates the V2 rule and keeps the old one running. They are compared side by side for a week.</p></div>`}
+  if(r.status==='cutover')return `<div class="panel"><h3>Kept</h3><p>You decided to keep this alarm. It moves to V2 when the ${esc(r.folder)} is switched over, with no further work per alert.</p><p class="actions"><button class="btn" data-act="undo">Change the decision</button></p></div>`;
+  const oem=r.folder==='Oracle OEM';
+  return `<div class="panel"><h3>Do you need this alert?</h3><p>Proposed: <strong>${r.keep==='keep'?'keep it':'drop it'}</strong>. ${esc(r.why)}</p>
+      <ul class="plain">${[0,1,2].slice(0,Math.min(3,r.alerts)).map(i=>`<li><bdi class="raw" dir="auto">${esc(r.msg)}</bdi><span class="n">${r.inc.length?r.inc.length+' incidents this week':'no incidents this week'}</span></li>`).slice(0,1).join('')}</ul>
+      <p class="note">${r.alerts} alerts share this alarm definition. One decision covers all of them.</p></div>
+    <div class="panel"><h3>How it reaches you today</h3><p>${oem?'OEM sends it by webhook and clears it by itself. That already matches the standard, so only the format changes.':'The collector re-sends it on every poll with an expiry time, and the database removes it when the time runs out. That comes from the collector, not from this alert, and the new collector design replaces it with one “fired” and one “cleared”.'}</p></div>
+    <div class="panel"><p class="actions"><button class="btn ${r.keep==='keep'?'primary':''}" data-act="keepalarm">Keep it</button><button class="btn ${r.keep==='drop'?'primary':'danger'}" data-act="dropalarm">Drop it</button></p>
+      <p>${oem?'Dropping it means switching the rule off in OEM.':'Your decision goes into the collector\'s allow and deny list.'} Next week's run confirms it.</p></div>`;
+}
+
+// ---------- actions ----------
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('on'),3800)}
+const closeDrawer=()=>document.getElementById('drawer').close();
+const ACT={
+  reset(){ALERTS=null;reset();toast('Back to the start.')},
+  tab(v){S.tab=v;render();window.scrollTo({top:0})},
+  jump(v){if(v==='side'){S.tab='side';render();return}if(!v)return;S.tab='plan';S.open[v]=true;render();document.getElementById('m-'+v)?.scrollIntoView({behavior:'smooth',block:'start'})},
+  more(v){S.all[v]=!S.all[v];render()},
+  fold(v){S.folders[v]=!S.folders[v];render()},
+  rule(v){drawer(RULES[+v])},
+  close(){closeDrawer()},
+  toast(v){toast(v)},
+  page(v){S.page+=+v;render()},
+  folder(v){const rs=todo('auto').filter(r=>r.folder===v);rs.forEach(r=>{r.status='shadow';r.verdict='fresh'});render();toast(`${rs.length} rules handed to the migration service. They now run side by side with the old ones.`)},
+  migrate(){CUR.status='shadow';CUR.verdict='fresh';closeDrawer();render();toast('V2 rule created. It runs side by side with the old one for a week.')},
+  approve(){CUR.draft=document.getElementById('draft').value;CUR.status='shadow';CUR.verdict='fresh';const sib=document.getElementById('sibs')?.checked;closeDrawer();render();
+    toast(sib?'Approved. Drafts for the sibling rules are ready for review.':'Approved. The V2 rule runs side by side with the old one for a week.')},
+  delete(){CUR.status='done';closeDrawer();render();toast('Rule paused. It is deleted in two weeks unless someone switches it back on.')},
+  keep(){CUR.lane='auto';CUR.why='';CUR.folder='ETL / misc';closeDrawer();render();toast('Kept. It moved to “migrate automatically”.')},
+  applywait(){CUR.inc=CUR.inc.filter(x=>x.d>WAITS[CUR.wait]);CUR.pattern='';CUR.lane='auto';CUR.folder='ETL / streaming';closeDrawer();render();toast('Wait time set. The rule moved to “migrate automatically”.')},
+  pause(){CUR.status='done';closeDrawer();render();toast('Old rule paused. Its alerts have left Appchi.')},
+  pauseall(){const rs=shadow().filter(r=>verdictOf(r)==='safe');rs.forEach(r=>r.status='done');render();toast(`${rs.length} old rules paused.`)},
+  keepalarm(){CUR.status='cutover';closeDrawer();render();toast('Kept. It moves to V2 when the collector is switched over.')},
+  dropalarm(){CUR.status='done';closeDrawer();render();toast('Dropped. It is added to the deny list and leaves Appchi.')},
+  undo(){CUR.status='todo';CUR.verdict='';closeDrawer();render();toast('Undone.')},
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;ACT[b.dataset.act](b.dataset.v)});
+document.addEventListener('toggle',e=>{const l=e.target.dataset?.lane;if(l)S.open[l]=e.target.open},true);
+document.addEventListener('input',e=>{const t=e.target;
+  if(t.id==='q'){S.q=t.value;S.page=0;const pos=t.selectionStart;render();const n=document.getElementById('q');n.focus();n.setSelectionRange(pos,pos)}
+  if(t.id==='wait'){CUR.wait=+t.value;document.getElementById('d-body').innerHTML=drawerBody(CUR);document.getElementById('wait').focus()}
+  if(t.name==='sev'){CUR.sev=t.value;const d=document.getElementById('draft').value;CUR.draft=d;document.getElementById('d-body').innerHTML=drawerBody(CUR)}});
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='fl'){S.fl=t.value;S.page=0;render()}if(t.id==='fs'){S.fs=t.value;S.page=0;render()}});
+document.getElementById('drawer').addEventListener('click',e=>{if(e.target.id==='drawer')closeDrawer()});
+reset();RULES.forEach(r=>r.sevProposed=r.sev);
+</script>
+</body>
+</html>
