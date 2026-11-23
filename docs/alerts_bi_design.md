@@ -43,8 +43,9 @@ and its product specification (`docs/alerts-bi-portal-action-plan-spec.md`) is u
 review. The product owner has decided these points. They describe planned behavior and change
 nothing implemented today:
 
-* **Alert cycles** (2026-11-23). Each alert will store a count of its observed firing episodes
-  (section 7.14), shown to teams as **alert cycles**, not "incidents". One alert cycle runs
+* **Alert cycles** (2026-11-23). Each Grafana alert will store a count of its observed firing
+  episodes (section 7.14), shown to teams as **alert cycles**, not "incidents". API alerts
+  show events only, because many API senders never send clear. One alert cycle runs
   from the first firing message until the clear (v1) or resolved (v2) message; re-sends inside
   it (every 5 minutes in v1, 12 hours in v2) do not start a new cycle, so alert cycles, unlike
   rows, are comparable between v1 and v2. Weeks analysed before the count exists show events
@@ -52,22 +53,25 @@ nothing implemented today:
   without one and fires again later counts as one cycle, and how often that happens is to be
   measured on production data.
   "Incident" stays reserved for Epic B's count from Grafana history, which is a different number.
-* **Lane 5, collectors and other senders** (2026-11-23). Every V1 alert with
-  `provider = api` goes to lane 5 in Stage 1, one group per application, labelled "change at
-  the sender". It is evaluated before the other lanes, so "migrate automatically" holds only
-  Grafana alerts, and it is excluded from "Start here". No configuration is needed.
-* **Sender rules** (2026-11-16 and 2026-11-23), in Stage 2. Sender rules name each API sender
-  and split lane 5's application groups, for example by alarm type; API alerts no rule matches
-  stay grouped by application. Operators create and edit them in admin, each rule belongs to
-  one team, and no fixed field identifies a collector's alarm type: operators write each rule
-  as field conditions, all of which must match, and each rule is one group.
+* **API alerts in Stage 1** (2026-11-23). Stage 1 has four lanes. API alerts
+  (`provider = api`) go through them like any alert, grouped by application and labelled
+  "change at the sender", with no action button; an API alert with no finding goes to
+  "migrate automatically" with that label and is moved to V2 at the sender.
+* **Lane 5 and sender rules** (2026-11-16 and 2026-11-23), in Stage 2. Sender rules
+  recognise collectors and other known senders (for example vCenter, OCUM and Oracle OEM),
+  name them and place the V1 alerts they match in lane 5, "Collectors and other senders", one
+  group per rule. Lane 5 is checked before the other lanes, so a sender's alerts are reviewed
+  together with their findings still shown, and it is excluded from "Start here". API alerts
+  no rule matches stay in lanes 1 to 4. Operators create and edit sender rules in admin, each
+  rule belongs to one team, and no fixed field identifies a collector's alarm type: operators
+  write each rule as field conditions, all of which must match.
 * **Actions** (2026-11-23). Every group carries its lane's action button: delete, quiet,
   migrate or review. In Stage 1 the button opens the rule in Grafana, where the team makes the
   change. Once Epic B connects the migration service, the button opens it with the action, the
   group's rules and the team's week; a person approves there and the service makes the change
   (delete pauses the rule, then deletes it after a waiting period; quiet sets a tested wait;
   migrate and review create the V2 rule and run it side by side before the old one is paused).
-  Lane 5 has no button, because no Grafana rule exists. The portal itself still writes
+  API groups, including lane 5, have no button, because no Grafana rule exists. The portal itself still writes
   nothing and never offers Keep, Drop, Approve, Pause or Undo.
 * **Team decisions** (2026-11-23). Operators' recorded decisions (pending, confirmed,
   dismissed) are shown in the portal but never move an alert to another lane, and the portal
@@ -83,7 +87,7 @@ nothing implemented today:
   the phase 1 standard.
 * **Sender rule matching** (2026-11-23). Rules apply only to API alerts. Values
   match exactly, including case, against the alert's latest row, in both formats. A sender
-  rule changes the group only, never findings or the ruleset. Editing a team's sender rules is
+  rule changes the lane and group only, never findings or the ruleset. Editing a team's sender rules is
   a change of measurement basis.
 * **Progress and copy** (2026-11-23). Progress shows counts only: no arrows, percentages of
   change or "fixed" claims, as section 7.10 already requires. A team whose only V1 alerts come
