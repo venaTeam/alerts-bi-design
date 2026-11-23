@@ -192,7 +192,9 @@ A sender rule has a name, kind and conditions. A condition can use any alert fie
 
 The Senders page shows results per rule, warnings for rules that match nothing, and API alerts no rule matches yet.
 
-Each sender rule's name is shown wherever its alerts appear, in both V1 and V2: as their group in lane 5, in the rule/group column and filter of All alerts, and in the side-by-side view (2.3).
+Each sender rule's name is shown wherever its alerts appear, in both V1 and V2: as their group in lane 5 and in the rule/group column and filter of All alerts.
+
+**Sender side by side.** A sender rule matches the sender's alerts in both formats, so its page shows the sender's V1 and V2 alerts next to each other: the V1 alerts in lane 5 and the V2 alerts with their V2 category, each with its own count. This shows how far each sender has moved to V2. The two counts are never added together. This is separate from Epic B's side-by-side check of a migrated Grafana rule.
 
 Sender rules apply only to API alerts, in both formats; only V1 has lanes. In lane 5, each rule replaces part of an application group with its own group; API alerts no rule matches stay grouped by application. Sender rules change groups only, never findings. Rule changes affect the next run rather than rewriting historical weeks, and Progress marks them as a measurement change.
 
@@ -255,6 +257,7 @@ Epic B also fills these areas:
 - Operators can create/edit sender rules in admin for one team without affecting another team. Matched API alerts form one lane-5 group per rule, and the rule's name appears in All alerts and the side-by-side view; lanes 1 to 5 still equal the V1 total. Sender results do not erase findings or change old weeks.
 - Repeats inside one alert cycle count once. Alert cycles are marked unavailable for weeks where they cannot be known.
 - With Epic B, action buttons open the migration service with the action, the group's rules and the team's week; a folder button never includes rules from another lane or team.
+- A sender's page shows its V1 and V2 alerts side by side, with separate counts that are never added.
 - Epic B areas appear only with their data and its age, and are hidden otherwise.
 
 ## Summary
