@@ -9,7 +9,7 @@
 Teams must move their alerts from the old format (V1) to the new standard (V2). Today, a team that opens its week in the review portal sees a lot of data and no clear next step.
 
 - **Seven tabs, no starting point.** The team page is split into Overview, Fix list, Volume, Dashboards, Migration, History and Slides. None of them says what to do first.
-- **Rules are named, not taught.** The page shows rule codes and findings. A reader must already know the standard to understand what to fix.
+- **Rules are named, not explained.** The page shows rule codes without reasons or examples, so a reader must already know the standard to understand what to fix.
 - **It does not scale.** Some teams have 800 to 1,000 distinct alerts, produced by a much smaller number of Grafana rules that share the same problems. The portal lists alerts one by one, so one bad rule looks like hundreds of separate tasks.
 - **The goal is not visible.** The project's goal is to get every team off V1. The page does not show how far a team is from that.
 
@@ -31,7 +31,7 @@ Turn the team's week into an **action plan**. Show where the team stands on V1 a
 - Explain every recommendation with a reason and examples.
 - Keep copy short: a label, a number and one sentence to fix; no teaching sentences or explanatory paragraphs.
 - Keep V1 and V2 counts separate. Every V1 alert belongs to one action lane. V2 shows alerts meeting the standard and groups needing action, such as improving the message or deleting the alert.
-- Give every recommendation an action button: delete, quiet, migrate, review or fix. The button opens Grafana or the migration service, where a person makes or approves the change. The portal itself writes nothing.
+- Give each recommendation an action button where there is a rule to act on: delete, quiet, migrate, review or fix. The button opens Grafana or the migration service, where a person makes or approves the change. The portal itself writes nothing.
 - Support small and large teams and accessible light/dark views.
 - **Stage 1** uses only the findings and alert facts already produced and published each week. It must not change how alerts are analysed or which findings they receive.
 - **Stage 2** adds what Stage 1 cannot show without new data: sender rules with the fifth lane for collectors and other senders, alert cycles, and actions through the migration service with other Epic B information.
@@ -190,7 +190,7 @@ In Stage 1, API alerts go through lanes 1 to 4, grouped by application. Sender r
 | Who uses a rule | Each rule applies only to its team. Editing one team's rules does not change another team's rules. |
 | How alerts are grouped | The operator writing the rule decides, with field conditions such as "field x = y and field z = e." Each rule is one group in lane 5. To split vCenter alarms by type, write one rule per type. |
 
-A sender rule has a name, kind and conditions. A condition can use any alert field the operator chooses, for example object, node name or message, with is, is one of, starts with or contains. Values must match exactly, including upper and lower case, and are tested against the alert's latest message. All conditions must match; the first matching rule wins.
+A sender rule has a name and conditions. A condition can use any alert field the operator chooses, for example object, node name or message, with is, is one of, starts with or contains. Values must match exactly, including upper and lower case, and are tested against the alert's latest received event. All conditions must match; the first matching rule wins.
 
 The Senders page shows results per rule, warnings for rules that match nothing, and API alerts no rule matches yet.
 
@@ -218,7 +218,7 @@ An **alert cycle** runs from the first firing message until the clear (V1) or re
 
 Show alert cycles first and received events as supporting information. For groups, say "N alert cycles across M alerts." All alerts gains an alert-cycles column and orders by most alert cycles, then most events. Group and detail pages show alert cycles next to events.
 
-Older weeks show events only; alert cycles are marked unavailable.
+Weeks analysed before alert cycles existed show events only; alert cycles are marked unavailable.
 
 #### 2.3 Actions in the migration service and other Epic B information
 
@@ -256,15 +256,18 @@ Epic B also fills these areas:
 - Start here shows at most five groups, at most two per lane, from lanes 1 to 4; lanes of 10 alerts or fewer list their alerts directly.
 - Recorded decisions are visible and never change an alert's lane.
 - V1/V2 remain separate; readiness-only V2 gaps do not count as phase-1 failures. V2 action categories open the corresponding filtered alerts.
+- V2 alerts the model did not check show as "not checked" and are not counted as meeting the standard.
 - Search, filters, paging, back links and old bookmarks behave consistently.
+- The V2 standard panel opens from every view, and the portal team directory and admin Teams list can be searched.
 - Every recommendation shows its evidence.
 - Every Grafana group with a rule link, V1 or V2, has its action button, opening the rule in Grafana; API groups have none.
-- Progress shows the recorded phase, six cards, measurement changes and access to all published weeks, with counts only.
+- Progress shows the recorded phase, six cards, measurement changes and access to all published weeks, with counts only. When a team's only V1 alerts left come from the API, it says "Grafana rules done; collectors remain."
 - Copy is a label, a number and one sentence to fix; no explanatory paragraphs.
 
 **Stage 2**
 
 - Operators can create/edit sender rules in admin for one team without affecting another team. Lane 5 holds exactly the V1 alerts a sender rule matches, one group per rule, and the rule's name appears in All alerts and the side-by-side view; lanes 1 to 5 together equal the V1 total. Sender results do not erase findings or change old weeks.
+- The Senders page shows results per rule, warns about rules that match nothing, and lists API alerts no rule matches.
 - Repeats inside one alert cycle count once. Alert cycles are counted for Grafana alerts only; API alerts show events. Alert cycles are marked unavailable for weeks where they cannot be known.
 - With Epic B, action buttons open the migration service with the action, the group's rules and the team's week; a folder button never includes rules from another lane or team.
 - A sender's page shows its V1 and V2 alerts side by side, with separate counts that are never added.
