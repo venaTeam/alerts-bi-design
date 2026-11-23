@@ -53,9 +53,9 @@ a window total — a 7-day total is 7× a 1-day total for arithmetic reasons alo
 it as "they have seven times more alerts" is the mistake the rate prevents.
 
 **v1 and v2 row counts are never added together.** A row count reflects how often rows are written,
-which differs between the two systems, so moving one alert between schemas can change its
-row count without anyone improving anything. Grafana writes a row on every evaluation, so
-`alerts` is evaluation load, not notifications.
+which differs between the two systems: Grafana re-sends a still-firing alert every 5 minutes
+in v1 and every 12 hours in v2 (design section 1.1, confirmed 2026-11-23). Moving one alert
+between schemas can therefore change its row count without anyone improving anything.
 
 ---
 

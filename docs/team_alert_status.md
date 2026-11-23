@@ -98,9 +98,9 @@ A dash under readiness means **no v2 identities fired in this window**, which is
 ### payments-core — done
 
 Fully migrated, well-formed alerts. Only 5 rows over 3 identities reach the window because
-Grafana writes a v2 row per 12-hour evaluation rather than every 5 minutes — the single most
-important arithmetic fact in this dataset. (These are evaluation rows; the notification
-repeat interval is disabled on both schemas.) No core findings, no readiness gaps, 100% readiness, and
+Grafana re-sends a firing v2 alert every 12 hours rather than every 5 minutes as in v1 — the
+single most important arithmetic fact in this dataset (design section 1.1, confirmed
+2026-11-23). No core findings, no readiness gaps, 100% readiness, and
 with no v1 identities the derived phase is `done`.
 
 ### legacy-batch-jobs — phase_0, the classic stuck-alert shape
@@ -230,7 +230,7 @@ One identity per boundary of design section 7.14, with rows from 2026-08-20 to 2
 | Grafana, a firing row every 12h, rows spanning exactly 72h | stuck (inclusive) |
 | Grafana, a firing row every 12h, rows spanning 71h59m | none |
 | Grafana, one firing row 100h before the window ends, then silence | none — one row spans 0h |
-| Grafana F, F, C and F, F, F, C | none — repeated Grafana rows are evaluations, not spam |
+| Grafana F, F, C and F, F, F, C | none — repeated Grafana rows are re-sends, not spam |
 | Grafana F, C, F, F, C | none |
 | Grafana, eight 12-hourly firing rows spanning 84h, never cleared | stuck |
 | Grafana, three fire → clear cycles within 20h | flapping |

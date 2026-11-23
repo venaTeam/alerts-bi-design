@@ -1,5 +1,99 @@
 # Alerts BI — Design Document
 
+## Grafana repeat intervals: v1 every 5 minutes, v2 every 12 hours — accepted 2026-11-23
+
+On 2026-11-23 the product owner confirmed how Appchi alerts are sent:
+
+* **Grafana alert rules** re-send a still-firing alert on a timer: every **5 minutes** in v1
+  and every **12 hours** in v2.
+* **v1** has no status field. A v1 alert ends when it is sent with severity `clear` (code 1).
+* **v2** is sent with `status: firing` while it is active and `status: resolved` when it ends.
+* **API senders** are not on these repeats; they send on their own schedule.
+
+This confirms the 2026-08-27 intervals in section 1.1 and supersedes that section's
+2026-10-01 correction (repeat interval disabled, a row on every evaluation). It also supersedes
+the account Epic A recorded on 2026-11-12 (both every 12 hours). What follows from it:
+
+* **Rows are re-sends, not evaluations.** A firing Grafana alert's repeated rows are timed
+  re-sends of the same alert. Rule 6 still never judges a Grafana alert by its row count.
+* **R6 is unchanged.** Ruleset 1.1.0's definitions, thresholds and episode boundaries stay
+  (section 7.14). A clear is still v1 severity `clear` or v2 `status = resolved`. Stuck is still
+  measured to the last firing row; the measured span can be up to one repeat interval shorter
+  than the real one at each end of the window (5 minutes in v1, 12 hours in v2). Flapping
+  counts fire → clear transitions, which are sent when they happen. Spamming stays API-only,
+  because Grafana re-sends are not a send rate.
+* **Silence is read against the repeat interval.** Silence shorter than the schema's interval
+  is not evidence that a Grafana alert stopped firing. Silence longer than it, without a clear,
+  means the alert is no longer firing: it resolved without a clear, the rule was deleted or
+  paused, or a re-send was lost. Closing an episode on such a gap would be an R6 change with a
+  ruleset bump and is not decided.
+* **Section 3.3 stands as written.** 288 rows a day in v1 against 2 in v2, the 144x gap and
+  the headline-number trap describe production, and the 2026-08-27 scale measurement (about
+  100 rows per distinct alert per day) is consistent with the 5-minute v1 interval.
+* **The mock models production** (section 7.5). Its v1 5-minute and v2 12-hour cadences are
+  the real repeat intervals. Only the generator's comments and names, which call these rows
+  evaluations, are out of date. Its data and the hand-authored oracle are unchanged.
+
+No code, migration, contract, prompt or ruleset changes with this decision.
+
+## Epic A product decisions — recorded 2026-11-23
+
+Epic A, "Portal action plan" (`docs/epics/EPIC-A-portal-action-plan.md`), is still a proposal,
+and its product specification (`docs/alerts-bi-portal-action-plan-spec.md`) is under
+review. The product owner has decided these points. They describe planned behavior and change
+nothing implemented today:
+
+* **Alert cycles** (2026-11-23). Each alert will store a count of its observed firing episodes
+  (section 7.14), shown to teams as **alert cycles**, not "incidents". One alert cycle runs
+  from the first firing message until the clear (v1) or resolved (v2) message; re-sends inside
+  it (every 5 minutes in v1, 12 hours in v2) do not start a new cycle, so alert cycles, unlike
+  rows, are comparable between v1 and v2. Weeks analysed before the count exists show events
+  only, with no estimate. Only a clear or resolved message ends a cycle: an alert that stops
+  without one and fires again later counts as one cycle, and how often that happens is to be
+  measured on production data.
+  "Incident" stays reserved for Epic B's count from Grafana history, which is a different number.
+* **Lane 5, collectors and other senders** (2026-11-23). Every V1 alert with
+  `provider = api` goes to lane 5 in Stage 1, one group per application, labelled "change at
+  the sender". It is evaluated before the other lanes, so "migrate automatically" holds only
+  Grafana alerts, and it is excluded from "Start here". No configuration is needed.
+* **Sender rules** (2026-11-16 and 2026-11-23), in Stage 2. Sender rules name each API sender
+  and split lane 5's application groups, for example by alarm type; API alerts no rule matches
+  stay grouped by application. Operators create and edit them in admin, each rule belongs to
+  one team, and no fixed field identifies a collector's alarm type: operators write each rule
+  as field conditions, all of which must match, and each rule is one group.
+* **Actions** (2026-11-23). Every group carries its lane's action button: delete, quiet,
+  migrate or review. In Stage 1 the button opens the rule in Grafana, where the team makes the
+  change. Once Epic B connects the migration service, the button opens it with the action, the
+  group's rules and the team's week; a person approves there and the service makes the change
+  (delete pauses the rule, then deletes it after a waiting period; quiet sets a tested wait;
+  migrate and review create the V2 rule and run it side by side before the old one is paused).
+  Lane 5 has no button, because no Grafana rule exists. The portal itself still writes
+  nothing and never offers Keep, Drop, Approve, Pause or Undo.
+* **Team decisions** (2026-11-23). Operators' recorded decisions (pending, confirmed,
+  dismissed) are shown in the portal but never move an alert to another lane, and the portal
+  records no team decision; teams make the change in Grafana, the migration service or at the
+  sender. Letting lanes
+  follow decisions would first require decisions to carry over between weeks.
+* **Action plan defaults** (2026-11-23, previously the epic's author's calls). "Start here"
+  takes lanes 1 to 4 in order, largest groups first, at most two per lane and five in total.
+  A lane with 10 alerts or fewer after the application filter lists its alerts instead of
+  groups. A V1 alert the model did not assess, with no core finding, goes to "migrate
+  automatically" and is labelled "not checked by the model". A Grafana rule link is grouped trimmed, without query string or fragment, from the alert's
+  latest row. A v2 alert the model did not assess is "not checked", not counted as meeting
+  the phase 1 standard.
+* **Sender rule matching** (2026-11-23). Rules apply only to API alerts. Values
+  match exactly, including case, against the alert's latest row, in both formats. A sender
+  rule changes the group only, never findings or the ruleset. Editing a team's sender rules is
+  a change of measurement basis.
+* **Progress and copy** (2026-11-23). Progress shows counts only: no arrows, percentages of
+  change or "fixed" claims, as section 7.10 already requires. A team whose only V1 alerts come
+  from collectors and other senders is shown as "Grafana rules done; collectors remain",
+  without changing its recorded phase. Copy follows section 7.10 unchanged: a label, a number
+  and one sentence to fix, with no teaching sentences or explanatory paragraphs.
+* **No V1 retirement deadline** has been agreed (2026-11-17). The portal shows no deadline or
+  countdown.
+* **Alert messages are English** (2026-11-17). Hebrew support is out of scope.
+
 ## Key fields up to 800 characters — accepted 2026-10-28
 
 On 2026-10-28 the product owner reported that sending teams' `key_field` values can reach 800
@@ -817,7 +911,7 @@ Once an alert arrives, it lands in two places:
 * **SQL Server — "hot alerts".** Holds only alerts that are *currently active*. This is the operational surface: teams build Grafana panels that query this database, and that is what the on-call engineer actually looks at.
 * **Elasticsearch (ECK) — history.** Every alert event that ever arrived, with **3-month retention**.
 
-The primary key of an alert is **`key_field` + `application`**. A still-active alert sent via Grafana is re-fired with the same key on the notification policy's repeat interval — and **that interval differs between the two systems**: Appchi v1 repeats every **5 minutes**, Appchi V2 every **12 hours** (confirmed 2026-08-27). That 144x gap dominates raw row counts and is the single most important fact for section 3.3. **Corrected 2026-10-01 (product owner):** the Grafana repeat interval is **disabled** in both v1 and v2 notification policies, so a still-firing alert is not re-sent on a timer; no notification is re-sent on a timer. **Clarified the same day:** Grafana writes an Elasticsearch row on **every evaluation** of a firing rule, so the observed repetition (section 3.3's scale measurement, ~100 rows per alert per day) is evaluation cadence, not notifications. A row count therefore measures how long and how often a rule was evaluated while firing; rule 6 never judges a Grafana alert by its row count (section 7.14). Rows against distinct alerts (section 3.3) stays the counting rule regardless of cause.
+The primary key of an alert is **`key_field` + `application`**. A still-active alert sent via Grafana is re-fired with the same key on the notification policy's repeat interval — and **that interval differs between the two systems**: Appchi v1 repeats every **5 minutes**, Appchi V2 every **12 hours** (confirmed 2026-08-27). That 144x gap dominates raw row counts and is the single most important fact for section 3.3. **Corrected 2026-10-01 (product owner):** the Grafana repeat interval is **disabled** in both v1 and v2 notification policies, so a still-firing alert is not re-sent on a timer; no notification is re-sent on a timer. **Clarified the same day:** Grafana writes an Elasticsearch row on **every evaluation** of a firing rule, so the observed repetition (section 3.3's scale measurement, ~100 rows per alert per day) is evaluation cadence, not notifications. A row count therefore measures how long and how often a rule was evaluated while firing; rule 6 never judges a Grafana alert by its row count (section 7.14). Rows against distinct alerts (section 3.3) stays the counting rule regardless of cause. **Corrected 2026-11-23 (product owner):** the 2026-10-01 correction and clarification are superseded, and the 2026-08-27 intervals stand: a Grafana alert rule re-sends a still-firing alert every **5 minutes** in v1 and every **12 hours** in v2, so repeated rows are timed re-sends, not evaluations. A v1 alert has no status field and ends when sent with severity `clear`; a v2 alert is sent with `status: firing` and ends with `status: resolved`. API senders are not on these repeats. See "Grafana repeat intervals: v1 every 5 minutes, v2 every 12 hours" at the top of this document.
 
 ### 1.2 The standardization project
 
@@ -983,6 +1077,8 @@ A raw row count is dominated by *duration*, not by how noisy a team is, and it c
 |---|---|---|
 | v1 | 5 minutes | 288 rows/day, ~8,600 rows/month |
 | v2 | 12 hours | 2 rows/day, ~60 rows/month |
+
+**Confirmed 2026-11-23 (section 1.1):** these repeat intervals describe production. The rows are timed re-sends of a still-firing alert, not evaluations as read on 2026-10-01.
 
 **Decision:** keep counting simple, but always store **two** numbers side by side:
 
@@ -1432,6 +1528,8 @@ The MVP design is settled and the MVP is built. What remains is batching validat
 1. **Threshold: what fire rate counts as spam?** It must differ **by schema as well as by provider** — the expected Grafana baseline is ~288 rows/day in v1 and ~2/day in v2 (section 3.3), so a single fixed threshold would flag every healthy v1 alert and no unhealthy v2 one. Likely expressed as a multiple of the expected repeat cadence rather than as an absolute count.
 2. **API-sent alerts: do they have any re-fire cadence, or are they one-shot?** Only affects the threshold above. Noted because the mock generator currently leaves API alerts on their authored cadence rather than inventing one.
 
+**Amended 2026-11-23 (section 1.1):** Grafana re-sends a firing alert every 5 minutes in v1 and every 12 hours in v2, and R6 is unchanged. On question 2, API senders are not on these repeats; they send on their own schedule, so spamming stays an absolute rate for API alerts.
+
 ### 7.4 Deliberately out of the MVP
 
 Recorded here so they read as choices rather than oversights.
@@ -1464,6 +1562,8 @@ Reconcile before building the pipeline against the mock, or the first thing the 
 **Rule 6 data remains in the mock and is simply not consumed**, which is the intended state: the rule stays documented and its fixtures stay generated, so switching R6 on later does not require re-seeding.
 
 **Amended 2026-10-01 (section 7.14).** R6 is now consumed, and the mock's v1 5-minute and v2 12-hour row cadences are read as what they model: Grafana writes a row on every evaluation, so a long-firing Grafana alert yields many firing rows in one episode, never re-sent notifications. The generator logic is unchanged; only its comments and names now say so. Two `acceptance-*` teams were appended, making six: `acceptance-fire-patterns`, one identity per R6 boundary (stuck at exactly 72 hours and one minute short, Grafana row runs that are never spamming, API rate and span edges, flapping inside and outside 24 hours, flapping outranking spamming, and v2 stuck and flapping), and `acceptance-unseen` for the visibility measure. The other acceptance teams' rows moved from 2026-08-20/21 to 2026-08-23/24, 54 hours before the window end, so no single-row Grafana alert there is incidentally stuck; every count and representative row is unchanged and only the oracle's date keys moved. **Revised the same day** when stuck moved to the open episode's firing-row span (section 7.14): a single row can no longer be stuck, so those dates no longer matter for R6 and were kept to avoid churn. `acceptance-fire-patterns` was re-authored by hand: its stuck cases are 12-hourly evaluation rows spanning exactly 72 hours (stuck), 71 hours 59 minutes (not stuck) and 84 hours (stuck), and a new case pins the corrected reading — one Grafana firing row 100 hours before the window end, then silence, is not stuck.
+
+**Amended 2026-11-23 (section 1.1).** Production re-sends a firing Grafana alert every 5 minutes in v1 and every 12 hours in v2, so the mock's cadences model production as re-sends, not evaluations. Only the generator's comments and names, which say evaluation, are out of date; its data and the hand-authored oracle are unchanged.
 
 ### 7.6 Boundaries settled during implementation
 
@@ -1829,6 +1929,15 @@ firing before the window still has rows throughout it; its open episode starts a
 row in the window, so stuck reads "firing rows spanning at least 72 hours of this week".
 That is a known limitation: an alert open for days before the window is judged only on its
 in-window rows.
+
+**Corrected 2026-11-23 (product owner, section 1.1).** Grafana does not write a row on every
+evaluation; it re-sends a firing alert every 5 minutes in v1 and every 12 hours in v2. R6's
+definitions, thresholds and ruleset 1.1.0 are unchanged, and stuck is still measured to the
+last firing row. The measured span can be up to one repeat interval shorter than the real one
+at each end of the window. Silence shorter than the schema's interval does not show that a
+Grafana alert stopped firing; closing an episode on a longer silence would be an R6 change and
+is not decided. See "Grafana repeat intervals: v1 every 5 minutes, v2 every 12 hours" at the
+top of this document.
 
 Every row of a matching identity matches R6, so the row-level allocation of section 4 is
 unchanged. R6 is a core finding, so the identity is withheld from the model (section 5.1);
